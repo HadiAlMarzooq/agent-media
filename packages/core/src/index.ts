@@ -13,6 +13,7 @@ export {
   mediaStepSchema,
   parsePlan,
   serializePlan,
+  validatePlan,
 } from './ir.js';
 export type { MediaExpectations, MediaPlan, MediaStep } from './ir.js';
 export { planMedia } from './planner.js';

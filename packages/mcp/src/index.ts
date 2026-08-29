@@ -1,10 +1,22 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { MediaError, parsePlan, planMedia, verifyMedia } from '@hadialmarzooq/agent-media-core';
-import type { MediaGoals } from '@hadialmarzooq/agent-media-core';
+import {
+  MediaError,
+  mediaPlanSchema,
+  parsePlan,
+  planMedia,
+  validatePlan,
+  verifyMedia,
+} from '@hadialmarzooq/agent-media-core';
+import type { MediaGoals, MediaPlan } from '@hadialmarzooq/agent-media-core';
 import { executePlan, getCapabilities, inspectMedia } from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
+
+const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
+  .version;
 
 const goalSchema = z.object({
   trimStartSeconds: z.number().nonnegative().optional(),
@@ -19,19 +31,19 @@ const goalSchema = z.object({
 });
 
 export function createMcpServer(): McpServer {
-  const server = new McpServer({ name: 'agent-media', version: '0.0.6' });
+  const server = new McpServer({ name: 'agent-media', version: packageVersion });
   server.registerTool(
     'inspect_media',
     {
       description: 'Inspect normalized media metadata.',
       inputSchema: { input: z.string().min(1) },
     },
-    async ({ input }) => result(await inspectMedia(input)),
+    async ({ input }) => safely(async () => inspectMedia(input)),
   );
   server.registerTool(
     'get_media_capabilities',
     { description: 'Detect local FFmpeg capabilities.' },
-    async () => result(await getCapabilities()),
+    async () => safely(getCapabilities),
   );
   server.registerTool(
     'plan_media',
@@ -40,51 +52,76 @@ export function createMcpServer(): McpServer {
       inputSchema: { input: z.string().min(1), goals: goalSchema },
     },
     async ({ input, goals }) =>
-      result({
+      safely(async () => ({
         plan: planMedia({
           source: await inspectMedia(input),
           goals: cleanGoals(goals),
           capabilities: await getCapabilities(),
         }),
-      }),
+      })),
   );
   server.registerTool(
     'execute_media_plan',
     {
       description: 'Execute a serialized semantic Media IR plan.',
       inputSchema: {
-        plan: z.string().min(1),
+        plan: z.union([z.string().min(1), mediaPlanSchema]),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
       },
     },
-    async ({ plan: serialized, output, overwrite }) => {
-      const plan = parsePlan(serialized);
-      const execution = await executePlan(plan, {
-        output,
-        ...(overwrite === undefined ? {} : { overwrite }),
-        sourceMetadata: await inspectMedia(plan.source.path),
-      });
-      return result({
-        ...execution,
-        verification: verifyMedia(await inspectMedia(execution.output), plan.expectations),
-      });
-    },
+    async ({ plan: input, output, overwrite }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        const execution = await executePlan(plan, {
+          output,
+          ...(overwrite === undefined ? {} : { overwrite }),
+        });
+        return {
+          output: execution.output,
+          verification: verifyMedia(await inspectMedia(execution.output), plan.expectations),
+        };
+      }),
   );
   server.registerTool(
     'verify_media',
     {
       description: 'Verify output media against a serialized semantic Media IR plan.',
-      inputSchema: { output: z.string().min(1), plan: z.string().min(1) },
+      inputSchema: {
+        output: z.string().min(1),
+        plan: z.union([z.string().min(1), mediaPlanSchema]),
+      },
     },
-    async ({ output, plan: serialized }) =>
-      result(verifyMedia(await inspectMedia(output), parsePlan(serialized).expectations)),
+    async ({ output, plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        return verifyMedia(await inspectMedia(output), plan.expectations);
+      }),
   );
   return server;
 }
 
 function result(value: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
+}
+
+async function safely(operation: () => Promise<unknown>) {
+  try {
+    return result(await operation());
+  } catch (error) {
+    const structured =
+      error instanceof MediaError
+        ? error.toJSON()
+        : {
+            code: 'UNEXPECTED_ERROR',
+            message: error instanceof Error ? error.message : String(error),
+          };
+    return { ...result(structured), isError: true };
+  }
+}
+
+function normalizePlan(input: string | MediaPlan): MediaPlan {
+  return typeof input === 'string' ? parsePlan(input) : validatePlan(input);
 }
 
 function cleanGoals(goals: z.infer<typeof goalSchema>): MediaGoals {

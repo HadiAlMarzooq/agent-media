@@ -20,7 +20,7 @@ pnpm test
 ```
 
 See [ROADMAP.md](ROADMAP.md) for delivery status and [ARCHITECTURE.md](ARCHITECTURE.md) for
-design boundaries.
+design boundaries. The complete TypeScript and protocol contract is in the [API guide](docs/api.md).
 
 ## CLI
 
@@ -38,6 +38,9 @@ agent-media capabilities
 
 Run `agent-media-mcp` over stdio. It exposes five semantic tools: `inspect_media`, `plan_media`,
 `execute_media_plan`, `verify_media`, and `get_media_capabilities`.
+
+Plans returned by `plan_media` can be passed directly to execution and verification, or persisted as
+JSON first. MCP failures use `isError` and a structured error body.
 
 ## Safety
 

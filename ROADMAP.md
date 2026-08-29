@@ -13,6 +13,7 @@ owner explicitly approves publication.
 | 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Complete |
 | 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Complete |
 | 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Complete |
+| 8     | Evidence-driven release hardening                  | 7            | Public-boundary dogfood and verified plan integrity                         | Complete |
 
 ## Phase tasks
 
@@ -69,4 +70,14 @@ owner explicitly approves publication.
 
 - [x] Complete the pre-public readiness review without changing visibility or publishing packages.
 
-Detailed checklists are kept adjacent to each implementation and completed with their phase.
+### Phase 8
+
+- [x] Validate Media IR at serialization, parsing, planning, and execution boundaries.
+- [x] Reject unsupported operation combinations and mismatched source metadata.
+- [x] Dogfood real FFmpeg through the SDK, serialized IR, CLI, and MCP protocol.
+- [x] Verify H.264/pixel-format compatibility and maximum-size output constraints.
+- [x] Return structured MCP failures and accept plan objects without manual stringification.
+- [x] Classify still images correctly and clean up partial failed outputs.
+
+Detailed private evidence and competitor tracking remain outside version control. Public release is
+still an explicit owner decision, not an automatic consequence of completing these engineering gates.
