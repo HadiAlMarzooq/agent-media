@@ -1,5 +1,11 @@
 # @agent-media/cli
 
+## 0.0.6
+
+### Patch Changes
+
+- 41dfc7d: Add JSON-first CLI commands and MCP tools for the Agent Media workflow.
+
 ## 0.0.5
 
 ### Patch Changes
