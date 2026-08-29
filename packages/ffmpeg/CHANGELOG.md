@@ -6,7 +6,7 @@
 
 - Add a verified `makeVertical` workflow with SDK, CLI, and MCP progress reporting; preflight
   incompatible concatenation streams; and ship executable recovery and cross-platform reliability
-  evidence.
+  evidence. Support compatible audio-only and video-only concatenation.
 - Updated dependencies
   - @hadialmarzooq/agent-media-core@0.0.9
 

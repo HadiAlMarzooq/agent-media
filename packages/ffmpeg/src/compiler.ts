@@ -115,7 +115,9 @@ function compileSpecial(
       `${labels}concat=n=${step.inputs.length}:v=${hasVideo ? 1 : 0}:a=${hasAudio ? 1 : 0}${outputs}`,
     );
     if (hasVideo) args.push('-map', '[v]', '-c:v', 'libx264');
-    if (hasAudio) args.push('-map', '[a]', '-c:a', 'aac');
+    if (hasAudio) {
+      args.push('-map', '[a]', '-c:a', hasVideo ? 'aac' : audioCodecForOutput(output));
+    }
     args.push(output);
     return { executable: 'ffmpeg', args };
   }
@@ -175,6 +177,11 @@ function encodingArgs(
 
 function audioCodec(format: 'm4a' | 'mp3' | 'wav'): string {
   return format === 'mp3' ? 'libmp3lame' : format === 'wav' ? 'pcm_s16le' : 'aac';
+}
+
+function audioCodecForOutput(output: string): string {
+  const extension = extname(output).slice(1).toLowerCase();
+  return extension === 'mp3' || extension === 'wav' ? audioCodec(extension) : audioCodec('m4a');
 }
 
 function even(value: number): number {

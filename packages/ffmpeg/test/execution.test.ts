@@ -168,6 +168,61 @@ describe('execution', () => {
     });
   });
 
+  it('concatenates compatible video-only and audio-only sources', async () => {
+    const videoOnly = join(directory, 'video-only.mp4');
+    const audioOnly = join(directory, 'audio-only.m4a');
+    const videoFixture = await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=size=64x64:rate=10',
+      '-t',
+      '0.5',
+      '-c:v',
+      'libx264',
+      '-an',
+      videoOnly,
+    ]);
+    const audioFixture = await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:sample_rate=44100',
+      '-t',
+      '0.5',
+      '-c:a',
+      'aac',
+      audioOnly,
+    ]);
+    if (videoFixture.exitCode !== 0) throw new Error(videoFixture.stderr);
+    if (audioFixture.exitCode !== 0) throw new Error(audioFixture.stderr);
+
+    const videoMetadata = await inspectMedia(videoOnly);
+    const audioMetadata = await inspectMedia(audioOnly);
+    const joinedVideo = join(directory, 'joined-video-only.mp4');
+    const joinedAudio = join(directory, 'joined-audio-only.m4a');
+    await executePlan(planMedia({ source: videoMetadata, goals: { concatenate: [videoOnly] } }), {
+      output: joinedVideo,
+      sourceMetadata: videoMetadata,
+    });
+    await executePlan(planMedia({ source: audioMetadata, goals: { concatenate: [audioOnly] } }), {
+      output: joinedAudio,
+      sourceMetadata: audioMetadata,
+    });
+
+    await expect(inspectMedia(joinedVideo)).resolves.toMatchObject({
+      kind: 'video',
+      video: { width: 64, height: 64 },
+      audio: { present: false },
+    });
+    await expect(inspectMedia(joinedAudio)).resolves.toMatchObject({
+      kind: 'audio',
+      audio: { present: true, codec: 'aac' },
+    });
+  });
+
   it('dogfoods a serialized vertical compatibility and size plan', async () => {
     const output = join(directory, 'dogfood.mp4');
     const plan = parsePlan(
