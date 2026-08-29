@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-cli",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Command-line interface for Agent Media.",
   "license": "MIT",
   "type": "module",

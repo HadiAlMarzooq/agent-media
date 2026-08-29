@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-core",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Semantic media planning and verification primitives.",
   "license": "MIT",
   "type": "module",
