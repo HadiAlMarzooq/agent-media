@@ -1,5 +1,11 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.0.6
+
+### Patch Changes
+
+- 29dbc6c: Record the pre-public readiness audit and move packages to the owner-scoped namespace.
+
 ## 0.0.5
 
 ### Patch Changes

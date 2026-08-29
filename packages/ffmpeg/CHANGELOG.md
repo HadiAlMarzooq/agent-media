@@ -1,5 +1,13 @@
 # @hadialmarzooq/agent-media-ffmpeg
 
+## 0.0.7
+
+### Patch Changes
+
+- 29dbc6c: Record the pre-public readiness audit and move packages to the owner-scoped namespace.
+- Updated dependencies [29dbc6c]
+  - @hadialmarzooq/agent-media-core@0.0.6
+
 ## 0.0.6
 
 ### Patch Changes

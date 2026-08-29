@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-ffmpeg",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "FFmpeg execution backend for Agent Media.",
   "license": "MIT",
   "type": "module",
