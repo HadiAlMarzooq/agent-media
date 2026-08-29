@@ -1,5 +1,13 @@
 # @agent-media/ffmpeg
 
+## 0.0.2
+
+### Patch Changes
+
+- 68bad08: Add normalized media inspection, FFmpeg capability detection, and stable backend errors.
+- Updated dependencies [68bad08]
+  - @agent-media/core@0.0.2
+
 ## 0.0.1
 
 ### Patch Changes
