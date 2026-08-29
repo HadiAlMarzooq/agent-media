@@ -10,7 +10,13 @@ import {
   serializePlan,
   verifyMedia,
 } from '@hadialmarzooq/agent-media-core';
-import { executePlan, getCapabilities, inspectMedia } from '@hadialmarzooq/agent-media-ffmpeg';
+import {
+  executePlan,
+  getCapabilities,
+  inspectMedia,
+  makeVertical,
+} from '@hadialmarzooq/agent-media-ffmpeg';
+import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 
 const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
   .version;
@@ -63,15 +69,47 @@ export function createProgram(): Command {
       print(plan);
     });
   program
+    .command('vertical <input>')
+    .description('Create and verify a high-compatibility 9:16 video.')
+    .requiredOption('--output <path>', 'output media path')
+    .option('--width <pixels>', 'target width (requires --height)', Number)
+    .option('--height <pixels>', 'target height (requires --width)', Number)
+    .option('--trim-start <seconds>', 'trim start in seconds', Number)
+    .option('--duration <seconds>', 'output duration in seconds', Number)
+    .option('--max-size <mb>', 'maximum file size in MB', Number)
+    .option('--remove-audio', 'remove audio')
+    .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
+    .action(async (input, options) => {
+      const onProgress = progressWriter(Boolean(options.progress));
+      print(
+        await makeVertical({
+          input,
+          output: options.output,
+          width: options.width,
+          height: options.height,
+          trimStartSeconds: options.trimStart,
+          durationSeconds: options.duration,
+          maxSizeMB: options.maxSize,
+          ...(options.removeAudio ? { audio: 'remove' } : {}),
+          overwrite: options.overwrite,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }),
+      );
+    });
+  program
     .command('execute <plan>')
     .description('Execute a saved plan.')
     .requiredOption('--output <path>', 'output media path')
     .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
     .action(async (planPath, options) => {
       const plan = parsePlan(await readFile(planPath, 'utf8'));
+      const onProgress = progressWriter(Boolean(options.progress));
       const result = await executePlan(plan, {
         output: options.output,
         overwrite: options.overwrite,
+        ...(onProgress === undefined ? {} : { onProgress }),
       });
       print({
         output: result.output,
@@ -91,6 +129,13 @@ export function createProgram(): Command {
 
 function print(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function progressWriter(enabled: boolean): ((progress: MediaProgress) => void) | undefined {
+  if (!enabled) return undefined;
+  return (progress) => {
+    process.stderr.write(`${JSON.stringify({ type: 'progress', ...progress })}\n`);
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

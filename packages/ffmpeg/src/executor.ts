@@ -6,6 +6,7 @@ import type { MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 
 import { compilePlan, type CompiledOperation } from './compiler.js';
 import { inspectMedia, type FfmpegOptions } from './inspect.js';
+import { createExecutionProgressReporter, type ProgressCallback } from './progress.js';
 import { runProcess } from './process.js';
 
 export interface ExecuteOptions extends FfmpegOptions {
@@ -14,6 +15,7 @@ export interface ExecuteOptions extends FfmpegOptions {
   overwrite?: boolean;
   allowedOutputDirectory?: string;
   signal?: AbortSignal;
+  onProgress?: ProgressCallback;
 }
 
 export interface ExecutionResult {
@@ -69,12 +71,22 @@ export async function executePlan(
     });
   }
   const operation = compilePlan(plan, sourceMetadata, output);
+  const progress = createExecutionProgressReporter(
+    executionDuration(plan, sourceMetadata),
+    options.onProgress,
+  );
+  progress.start();
   let result;
   try {
-    result = await runProcess(options.ffmpegPath ?? operation.executable, operation.args, {
-      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    result = await runProcess(
+      options.ffmpegPath ?? operation.executable,
+      progressArgs(operation.args),
+      {
+        ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        onStdout: progress.write,
+      },
+    );
   } catch (error) {
     throw new MediaError({
       code: 'FFMPEG_NOT_FOUND',
@@ -113,7 +125,25 @@ export async function executePlan(
       debug: { backend: 'ffmpeg', stderr: result.stderr },
     });
   }
+  progress.complete();
   return { output, operation };
+}
+
+function progressArgs(args: readonly string[]): string[] {
+  const result = [...args];
+  const insertionPoint = result.indexOf('-nostdin') + 1;
+  result.splice(insertionPoint, 0, '-progress', 'pipe:1', '-nostats');
+  return result;
+}
+
+function executionDuration(plan: MediaPlan, source: MediaMetadata): number | undefined {
+  if (plan.expectations.durationSeconds !== undefined) return plan.expectations.durationSeconds;
+  const trim = plan.steps.find((step) => step.operation === 'trim');
+  if (trim?.operation !== 'trim') return source.durationSeconds;
+  if (trim.endSeconds !== undefined) return trim.endSeconds - trim.startSeconds;
+  return source.durationSeconds === undefined
+    ? undefined
+    : Math.max(0, source.durationSeconds - trim.startSeconds);
 }
 
 async function removePartialOutput(path: string): Promise<void> {

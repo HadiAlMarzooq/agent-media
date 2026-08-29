@@ -11,6 +11,7 @@ export interface ProcessResult {
 export interface RunProcessOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
+  onStdout?: (chunk: string) => void;
 }
 
 export async function runProcess(
@@ -19,7 +20,8 @@ export async function runProcess(
   options: number | RunProcessOptions = 30_000,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const { timeoutMs, signal } = typeof options === 'number' ? { timeoutMs: options } : options;
+    const { timeoutMs, signal, onStdout } =
+      typeof options === 'number' ? { timeoutMs: options, onStdout: undefined } : options;
     if (signal?.aborted) {
       resolve({ stdout: '', stderr: '', exitCode: -1, timedOut: false, aborted: true });
       return;
@@ -41,6 +43,7 @@ export async function runProcess(
 
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
       stdout += chunk;
+      onStdout?.(chunk);
     });
     child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
       stderr += chunk;

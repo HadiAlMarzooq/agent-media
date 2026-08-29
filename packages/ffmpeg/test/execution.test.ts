@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
 
-import { executePlan, inspectMedia } from '../src/index.js';
+import { executePlan, inspectMedia, makeVertical } from '../src/index.js';
+import type { MediaProgress } from '../src/index.js';
 import { runProcess } from '../src/process.js';
 
 let directory = '';
@@ -155,7 +156,8 @@ describe('execution', () => {
         }),
       ),
     );
-    await executePlan(plan, { output });
+    const progress: MediaProgress[] = [];
+    await executePlan(plan, { output, onProgress: (event) => progress.push(event) });
     const transformed = await inspectMedia(output);
 
     expect(transformed).toMatchObject({
@@ -171,5 +173,37 @@ describe('execution', () => {
     });
     expect(transformed.sizeBytes).toBeLessThanOrEqual(153_000);
     expect(verifyMedia(transformed, plan.expectations)).toMatchObject({ passed: true });
+    expect(progress[0]).toMatchObject({ phase: 'executing', percent: 0 });
+    expect(progress.at(-1)).toMatchObject({ phase: 'executing', percent: 100 });
+    expect(
+      progress.every(
+        (event, index) => index === 0 || event.percent >= progress[index - 1]!.percent,
+      ),
+    ).toBe(true);
+  });
+
+  it('runs the makeVertical inspect-plan-execute-verify workflow', async () => {
+    const output = join(directory, 'workflow.mp4');
+    const progress: MediaProgress[] = [];
+    const result = await makeVertical({
+      input: fixture,
+      output,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+      maxSizeMB: 0.15,
+      onProgress: (event) => progress.push(event),
+    });
+
+    expect(parsePlan(result.serializedPlan)).toEqual(result.plan);
+    expect(result.output).toMatchObject({
+      path: output,
+      video: { width: 180, height: 320, aspectRatio: '9:16', codec: 'h264' },
+    });
+    expect(result.verification).toMatchObject({ passed: true });
+    expect(progress.map((event) => event.phase)).toEqual(
+      expect.arrayContaining(['inspecting', 'planning', 'executing', 'verifying', 'completed']),
+    );
+    expect(progress.at(-1)).toMatchObject({ phase: 'completed', percent: 100 });
   });
 });
