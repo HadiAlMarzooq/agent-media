@@ -1,8 +1,27 @@
 {
   "name": "@hadialmarzooq/agent-media-cli",
-  "version": "0.0.10",
-  "description": "Command-line interface for Agent Media.",
+  "version": "0.0.11",
+  "description": "JSON-first CLI for deterministic, verified media workflows.",
+  "keywords": [
+    "media",
+    "agents",
+    "ffmpeg",
+    "cli",
+    "automation"
+  ],
+  "homepage": "https://github.com/HadiAlMarzooq/agent-media#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HadiAlMarzooq/agent-media.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/HadiAlMarzooq/agent-media/issues"
+  },
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "type": "module",
   "bin": {
     "agent-media": "./dist/index.js"

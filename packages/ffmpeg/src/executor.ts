@@ -6,6 +6,7 @@ import type { MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 
 import { compilePlan, type CompiledOperation } from './compiler.js';
 import { inspectMedia, type FfmpegOptions } from './inspect.js';
+import { createExecutionProgressReporter, type ProgressCallback } from './progress.js';
 import { runProcess } from './process.js';
 
 export interface ExecuteOptions extends FfmpegOptions {
@@ -14,6 +15,7 @@ export interface ExecuteOptions extends FfmpegOptions {
   overwrite?: boolean;
   allowedOutputDirectory?: string;
   signal?: AbortSignal;
+  onProgress?: ProgressCallback;
 }
 
 export interface ExecutionResult {
@@ -68,13 +70,24 @@ export async function executePlan(
       suggestedActions: ['Inspect the planned source and pass that metadata to executePlan.'],
     });
   }
+  await preflightConcatenation(plan, sourceMetadata, options);
   const operation = compilePlan(plan, sourceMetadata, output);
+  const progress = createExecutionProgressReporter(
+    executionDuration(plan, sourceMetadata),
+    options.onProgress,
+  );
+  progress.start();
   let result;
   try {
-    result = await runProcess(options.ffmpegPath ?? operation.executable, operation.args, {
-      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    result = await runProcess(
+      options.ffmpegPath ?? operation.executable,
+      progressArgs(operation.args),
+      {
+        ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        onStdout: progress.write,
+      },
+    );
   } catch (error) {
     throw new MediaError({
       code: 'FFMPEG_NOT_FOUND',
@@ -113,7 +126,101 @@ export async function executePlan(
       debug: { backend: 'ffmpeg', stderr: result.stderr },
     });
   }
+  progress.complete();
   return { output, operation };
+}
+
+function progressArgs(args: readonly string[]): string[] {
+  const result = [...args];
+  const insertionPoint = result.indexOf('-nostdin') + 1;
+  result.splice(insertionPoint, 0, '-progress', 'pipe:1', '-nostats');
+  return result;
+}
+
+function executionDuration(plan: MediaPlan, source: MediaMetadata): number | undefined {
+  if (plan.expectations.durationSeconds !== undefined) return plan.expectations.durationSeconds;
+  const trim = plan.steps.find((step) => step.operation === 'trim');
+  if (trim?.operation !== 'trim') return source.durationSeconds;
+  if (trim.endSeconds !== undefined) return trim.endSeconds - trim.startSeconds;
+  return source.durationSeconds === undefined
+    ? undefined
+    : Math.max(0, source.durationSeconds - trim.startSeconds);
+}
+
+async function preflightConcatenation(
+  plan: MediaPlan,
+  source: MediaMetadata,
+  options: ExecuteOptions,
+): Promise<void> {
+  const concatenate = plan.steps.find((step) => step.operation === 'concatenate');
+  if (concatenate?.operation !== 'concatenate') return;
+
+  const metadata = await Promise.all(
+    concatenate.inputs.map(async (input, index) => {
+      if (index === 0) return source;
+      return inspectMedia(input, {
+        ...(options.ffprobePath === undefined ? {} : { ffprobePath: options.ffprobePath }),
+        ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+      });
+    }),
+  );
+  const baseline = metadata[0];
+  if (baseline === undefined) return;
+
+  for (const [index, candidate] of metadata.entries()) {
+    if (index === 0) continue;
+    const incompatibleFields = streamDifferences(baseline, candidate);
+    if (incompatibleFields.length === 0) continue;
+    throw new MediaError({
+      code: 'UNSUPPORTED_INPUT',
+      message: 'Concatenation inputs have incompatible stream layouts.',
+      context: {
+        input: concatenate.inputs[index],
+        inputIndex: index,
+        incompatibleFields,
+      },
+      suggestedActions: [
+        'Normalize the listed stream properties before concatenation.',
+        'Use inputs with matching video and audio stream layouts.',
+      ],
+    });
+  }
+}
+
+function streamDifferences(baseline: MediaMetadata, candidate: MediaMetadata): string[] {
+  const differences: string[] = [];
+  compare(
+    differences,
+    'video.present',
+    baseline.video !== undefined,
+    candidate.video !== undefined,
+  );
+  compare(differences, 'audio.present', baseline.audio.present, candidate.audio.present);
+  if (baseline.video !== undefined && candidate.video !== undefined) {
+    compare(differences, 'video.width', baseline.video.width, candidate.video.width);
+    compare(differences, 'video.height', baseline.video.height, candidate.video.height);
+    compare(differences, 'video.fps', baseline.video.fps, candidate.video.fps);
+    compare(
+      differences,
+      'video.pixelFormat',
+      baseline.video.pixelFormat,
+      candidate.video.pixelFormat,
+    );
+  }
+  if (baseline.audio.present && candidate.audio.present) {
+    compare(differences, 'audio.sampleRate', baseline.audio.sampleRate, candidate.audio.sampleRate);
+    compare(differences, 'audio.channels', baseline.audio.channels, candidate.audio.channels);
+  }
+  return differences;
+}
+
+function compare(
+  differences: string[],
+  field: string,
+  baseline: unknown,
+  candidate: unknown,
+): void {
+  if (baseline !== candidate) differences.push(field);
 }
 
 async function removePartialOutput(path: string): Promise<void> {

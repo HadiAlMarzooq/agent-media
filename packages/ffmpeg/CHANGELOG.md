@@ -1,5 +1,15 @@
 # @hadialmarzooq/agent-media-ffmpeg
 
+## 0.0.10
+
+### Patch Changes
+
+- Add a verified `makeVertical` workflow with SDK, CLI, and MCP progress reporting; preflight
+  incompatible concatenation streams; and ship executable recovery and cross-platform reliability
+  evidence. Support compatible audio-only and video-only concatenation.
+- Updated dependencies
+  - @hadialmarzooq/agent-media-core@0.0.9
+
 ## 0.0.9
 
 ### Patch Changes

@@ -48,6 +48,7 @@ describe('CLI', () => {
       'inspect',
       'capabilities',
       'plan',
+      'vertical',
       'execute',
       'verify',
     ]);
@@ -92,6 +93,43 @@ describe('CLI', () => {
     await expect(
       createProgram().parseAsync(['inspect', join(directory, 'missing.mp4')], { from: 'user' }),
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_INPUT' });
+  });
+
+  it('runs the vertical workflow and keeps progress separate from JSON output', async () => {
+    const output = join(directory, 'workflow.mp4');
+    let progressOutput = '';
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      progressOutput += String(chunk);
+      return true;
+    });
+    try {
+      const result = await runCli([
+        'vertical',
+        fixture,
+        '--output',
+        output,
+        '--width',
+        '180',
+        '--height',
+        '320',
+        '--duration',
+        '1',
+        '--progress',
+      ]);
+      expect(result).toMatchObject({
+        plan: { irVersion: '1', expectations: { aspectRatio: '9:16' } },
+        output: { path: output, video: { width: 180, height: 320 } },
+        verification: { passed: true },
+      });
+    } finally {
+      write.mockRestore();
+    }
+    const events = progressOutput
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { type: string; percent: number });
+    expect(events[0]).toMatchObject({ type: 'progress', percent: 0 });
+    expect(events.at(-1)).toMatchObject({ type: 'progress', percent: 100 });
   });
 });
 

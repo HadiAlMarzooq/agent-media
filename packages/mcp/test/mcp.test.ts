@@ -119,6 +119,39 @@ describe('MCP adapter', () => {
       await server.close();
     }
   });
+
+  it('exposes the vertical workflow with protocol-native progress', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-progress-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const progress: number[] = [];
+
+    try {
+      const output = join(directory, 'mcp-workflow.mp4');
+      const response = await client.callTool(
+        {
+          name: 'make_vertical',
+          arguments: { input: fixture, output, width: 180, height: 320, durationSeconds: 1 },
+        },
+        undefined,
+        {
+          onprogress: (event) => progress.push(event.progress),
+          resetTimeoutOnProgress: true,
+        },
+      );
+      expect(parseToolResult(response)).toMatchObject({
+        output: { path: output, video: { aspectRatio: '9:16' } },
+        verification: { passed: true },
+      });
+      expect(progress[0]).toBe(0);
+      expect(progress.at(-1)).toBe(100);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
 });
 
 function parseToolResult(response: unknown): unknown {

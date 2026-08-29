@@ -1,8 +1,27 @@
 {
   "name": "@hadialmarzooq/agent-media-mcp",
-  "version": "0.0.10",
-  "description": "MCP adapter for Agent Media.",
+  "version": "0.0.11",
+  "description": "MCP server for semantic, replayable, and verified media transformations.",
+  "keywords": [
+    "media",
+    "agents",
+    "ffmpeg",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "homepage": "https://github.com/HadiAlMarzooq/agent-media#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HadiAlMarzooq/agent-media.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/HadiAlMarzooq/agent-media/issues"
+  },
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "type": "module",
   "bin": {
     "agent-media-mcp": "./dist/index.js"

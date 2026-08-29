@@ -1,8 +1,27 @@
 {
   "name": "@hadialmarzooq/agent-media-ffmpeg",
-  "version": "0.0.9",
-  "description": "FFmpeg execution backend for Agent Media.",
+  "version": "0.0.10",
+  "description": "Safe FFmpeg execution, progress, and verified media workflows for software agents.",
+  "keywords": [
+    "media",
+    "agents",
+    "ffmpeg",
+    "video",
+    "mcp"
+  ],
+  "homepage": "https://github.com/HadiAlMarzooq/agent-media#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HadiAlMarzooq/agent-media.git",
+    "directory": "packages/ffmpeg"
+  },
+  "bugs": {
+    "url": "https://github.com/HadiAlMarzooq/agent-media/issues"
+  },
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

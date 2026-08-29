@@ -1,8 +1,27 @@
 {
   "name": "@hadialmarzooq/agent-media-core",
-  "version": "0.0.8",
-  "description": "Semantic media planning and verification primitives.",
+  "version": "0.0.9",
+  "description": "Versioned media planning and structured verification primitives for software agents.",
+  "keywords": [
+    "media",
+    "agents",
+    "media-ir",
+    "planning",
+    "verification"
+  ],
+  "homepage": "https://github.com/HadiAlMarzooq/agent-media#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HadiAlMarzooq/agent-media.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/HadiAlMarzooq/agent-media/issues"
+  },
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
 
-import { executePlan, inspectMedia } from '../src/index.js';
+import { executePlan, inspectMedia, makeVertical } from '../src/index.js';
+import type { MediaProgress } from '../src/index.js';
 import { runProcess } from '../src/process.js';
 
 let directory = '';
@@ -130,6 +131,98 @@ describe('execution', () => {
     await expect(inspectMedia(output)).resolves.toMatchObject({ kind: 'video' });
   });
 
+  it('rejects incompatible concatenation streams before execution', async () => {
+    const incompatible = join(directory, 'incompatible.mp4');
+    const generated = await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=size=640x360:rate=24',
+      '-t',
+      '1',
+      '-c:v',
+      'libx264',
+      '-an',
+      incompatible,
+    ]);
+    if (generated.exitCode !== 0) throw new Error(generated.stderr);
+
+    const output = join(directory, 'incompatible-join.mp4');
+    await expect(
+      executePlan(planMedia({ source: metadata, goals: { concatenate: [incompatible] } }), {
+        output,
+        sourceMetadata: metadata,
+      }),
+    ).rejects.toMatchObject({
+      code: 'UNSUPPORTED_INPUT',
+      context: {
+        inputIndex: 1,
+        incompatibleFields: expect.arrayContaining([
+          'video.width',
+          'video.height',
+          'video.fps',
+          'audio.present',
+        ]),
+      },
+    });
+  });
+
+  it('concatenates compatible video-only and audio-only sources', async () => {
+    const videoOnly = join(directory, 'video-only.mp4');
+    const audioOnly = join(directory, 'audio-only.m4a');
+    const videoFixture = await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=size=64x64:rate=10',
+      '-t',
+      '0.5',
+      '-c:v',
+      'libx264',
+      '-an',
+      videoOnly,
+    ]);
+    const audioFixture = await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:sample_rate=44100',
+      '-t',
+      '0.5',
+      '-c:a',
+      'aac',
+      audioOnly,
+    ]);
+    if (videoFixture.exitCode !== 0) throw new Error(videoFixture.stderr);
+    if (audioFixture.exitCode !== 0) throw new Error(audioFixture.stderr);
+
+    const videoMetadata = await inspectMedia(videoOnly);
+    const audioMetadata = await inspectMedia(audioOnly);
+    const joinedVideo = join(directory, 'joined-video-only.mp4');
+    const joinedAudio = join(directory, 'joined-audio-only.m4a');
+    await executePlan(planMedia({ source: videoMetadata, goals: { concatenate: [videoOnly] } }), {
+      output: joinedVideo,
+      sourceMetadata: videoMetadata,
+    });
+    await executePlan(planMedia({ source: audioMetadata, goals: { concatenate: [audioOnly] } }), {
+      output: joinedAudio,
+      sourceMetadata: audioMetadata,
+    });
+
+    await expect(inspectMedia(joinedVideo)).resolves.toMatchObject({
+      kind: 'video',
+      video: { width: 64, height: 64 },
+      audio: { present: false },
+    });
+    await expect(inspectMedia(joinedAudio)).resolves.toMatchObject({
+      kind: 'audio',
+      audio: { present: true, codec: 'aac' },
+    });
+  });
+
   it('dogfoods a serialized vertical compatibility and size plan', async () => {
     const output = join(directory, 'dogfood.mp4');
     const plan = parsePlan(
@@ -155,7 +248,8 @@ describe('execution', () => {
         }),
       ),
     );
-    await executePlan(plan, { output });
+    const progress: MediaProgress[] = [];
+    await executePlan(plan, { output, onProgress: (event) => progress.push(event) });
     const transformed = await inspectMedia(output);
 
     expect(transformed).toMatchObject({
@@ -171,5 +265,37 @@ describe('execution', () => {
     });
     expect(transformed.sizeBytes).toBeLessThanOrEqual(153_000);
     expect(verifyMedia(transformed, plan.expectations)).toMatchObject({ passed: true });
+    expect(progress[0]).toMatchObject({ phase: 'executing', percent: 0 });
+    expect(progress.at(-1)).toMatchObject({ phase: 'executing', percent: 100 });
+    expect(
+      progress.every(
+        (event, index) => index === 0 || event.percent >= progress[index - 1]!.percent,
+      ),
+    ).toBe(true);
+  });
+
+  it('runs the makeVertical inspect-plan-execute-verify workflow', async () => {
+    const output = join(directory, 'workflow.mp4');
+    const progress: MediaProgress[] = [];
+    const result = await makeVertical({
+      input: fixture,
+      output,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+      maxSizeMB: 0.15,
+      onProgress: (event) => progress.push(event),
+    });
+
+    expect(parsePlan(result.serializedPlan)).toEqual(result.plan);
+    expect(result.output).toMatchObject({
+      path: output,
+      video: { width: 180, height: 320, aspectRatio: '9:16', codec: 'h264' },
+    });
+    expect(result.verification).toMatchObject({ passed: true });
+    expect(progress.map((event) => event.phase)).toEqual(
+      expect.arrayContaining(['inspecting', 'planning', 'executing', 'verifying', 'completed']),
+    );
+    expect(progress.at(-1)).toMatchObject({ phase: 'completed', percent: 100 });
   });
 });

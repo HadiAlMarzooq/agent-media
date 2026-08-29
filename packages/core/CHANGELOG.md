@@ -1,5 +1,13 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.0.9
+
+### Patch Changes
+
+- Add a verified `makeVertical` workflow with SDK, CLI, and MCP progress reporting; preflight
+  incompatible concatenation streams; and ship executable recovery and cross-platform reliability
+  evidence.
+
 ## 0.0.8
 
 ### Patch Changes

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.0.0",
-  "description": "A deterministic media transformation runtime for software agents.",
+  "description": "Deterministic, verifiable media workflows for software agents.",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.0.0"
@@ -15,6 +15,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "demo": "pnpm build && node examples/agent-recovery.mjs",
+    "benchmark:reliability": "pnpm build && node benchmarks/reliability.mjs",
+    "benchmark:compare": "node benchmarks/compare-reliability.mjs",
+    "release:pack": "pnpm build && node scripts/package-release.mjs",
+    "release:smoke": "node scripts/smoke-release.mjs",
     "audit:prod": "pnpm audit --prod",
     "test:watch": "vitest",
     "changeset": "changeset",
