@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import process from 'node:process';
 
 import { MediaError, planMedia } from '../packages/core/dist/index.js';
 import {

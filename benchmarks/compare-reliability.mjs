@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import process from 'node:process';
 
 const directory = resolve(process.argv[2] ?? 'artifacts/reliability');
 const files = (await readdir(directory, { recursive: true }))

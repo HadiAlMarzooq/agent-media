@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
+import { Buffer } from 'node:buffer';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import process from 'node:process';
 
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '../packages/core/dist/index.js';
 import { executePlan, getCapabilities, inspectMedia } from '../packages/ffmpeg/dist/index.js';
