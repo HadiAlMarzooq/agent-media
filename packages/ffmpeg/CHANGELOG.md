@@ -1,5 +1,12 @@
 # @agent-media/ffmpeg
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [2d2a2b3]
+  - @agent-media/core@0.0.4
+
 ## 0.0.4
 
 ### Patch Changes

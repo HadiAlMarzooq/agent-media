@@ -1,5 +1,11 @@
 # @agent-media/core
 
+## 0.0.4
+
+### Patch Changes
+
+- 2d2a2b3: Add structured output verification against semantic plan expectations.
+
 ## 0.0.3
 
 ### Patch Changes
