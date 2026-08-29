@@ -1,5 +1,13 @@
 # @agent-media/mcp
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [ec3ea0c]
+  - @agent-media/core@0.0.5
+  - @agent-media/ffmpeg@0.0.6
+
 ## 0.0.6
 
 ### Patch Changes

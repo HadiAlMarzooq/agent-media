@@ -1,5 +1,13 @@
 # @agent-media/ffmpeg
 
+## 0.0.6
+
+### Patch Changes
+
+- ec3ea0c: Harden execution with cancellation, timeout classification, and output path safety.
+- Updated dependencies [ec3ea0c]
+  - @agent-media/core@0.0.5
+
 ## 0.0.5
 
 ### Patch Changes

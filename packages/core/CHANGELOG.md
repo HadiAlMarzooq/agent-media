@@ -1,5 +1,11 @@
 # @agent-media/core
 
+## 0.0.5
+
+### Patch Changes
+
+- ec3ea0c: Harden execution with cancellation, timeout classification, and output path safety.
+
 ## 0.0.4
 
 ### Patch Changes
