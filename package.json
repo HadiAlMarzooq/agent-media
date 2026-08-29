@@ -1,6 +1,7 @@
 {
   "name": "agent-media",
   "private": true,
+  "type": "module",
   "version": "0.0.0",
   "description": "A deterministic media transformation runtime for software agents.",
   "packageManager": "pnpm@10.33.0",

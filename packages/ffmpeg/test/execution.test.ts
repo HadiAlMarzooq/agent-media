@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { verifyMedia } from '@hadialmarzooq/agent-media-core';
+import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
 
 import { executePlan, inspectMedia } from '../src/index.js';
 import { runProcess } from '../src/process.js';
@@ -108,7 +108,7 @@ describe('execution', () => {
       audio: { present: true },
     });
     await expect(inspectMedia(frame)).resolves.toMatchObject({
-      kind: 'video',
+      kind: 'image',
       video: { width: 320, height: 180 },
     });
   });
@@ -128,5 +128,48 @@ describe('execution', () => {
       { output, sourceMetadata: metadata },
     );
     await expect(inspectMedia(output)).resolves.toMatchObject({ kind: 'video' });
+  });
+
+  it('dogfoods a serialized vertical compatibility and size plan', async () => {
+    const output = join(directory, 'dogfood.mp4');
+    const plan = parsePlan(
+      serializePlan(
+        planMedia({
+          source: metadata,
+          goals: {
+            trimStartSeconds: 0.25,
+            durationSeconds: 1,
+            aspectRatio: '9:16',
+            width: 180,
+            height: 320,
+            compatibility: 'high',
+            maxSizeMB: 0.15,
+            audio: 'preserve',
+          },
+          capabilities: {
+            ffmpegVersion: 'test',
+            encoders: { h264: true, hevc: false, av1: false, aac: true },
+            hardwareAcceleration: [],
+            filters: { scale: true, crop: true, concat: true, subtitles: false },
+          },
+        }),
+      ),
+    );
+    await executePlan(plan, { output });
+    const transformed = await inspectMedia(output);
+
+    expect(transformed).toMatchObject({
+      kind: 'video',
+      video: {
+        width: 180,
+        height: 320,
+        aspectRatio: '9:16',
+        codec: 'h264',
+        pixelFormat: 'yuv420p',
+      },
+      audio: { present: true, codec: 'aac' },
+    });
+    expect(transformed.sizeBytes).toBeLessThanOrEqual(153_000);
+    expect(verifyMedia(transformed, plan.expectations)).toMatchObject({ passed: true });
   });
 });

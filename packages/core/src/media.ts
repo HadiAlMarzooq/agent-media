@@ -6,6 +6,7 @@ export interface VideoStreamMetadata {
   aspectRatio: string;
   fps?: number;
   codec?: string;
+  pixelFormat?: string;
   rotationDegrees?: number;
 }
 

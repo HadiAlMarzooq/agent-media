@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 
 import { Command } from 'commander';
 import {
@@ -11,12 +12,15 @@ import {
 } from '@hadialmarzooq/agent-media-core';
 import { executePlan, getCapabilities, inspectMedia } from '@hadialmarzooq/agent-media-ffmpeg';
 
+const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
+  .version;
+
 export function createProgram(): Command {
   const program = new Command();
   program
     .name('agent-media')
     .description('Deterministic semantic media transformations.')
-    .version('0.0.6');
+    .version(packageVersion);
   program
     .command('inspect <input>')
     .description('Inspect media metadata.')
@@ -67,11 +71,10 @@ export function createProgram(): Command {
       const plan = parsePlan(await readFile(planPath, 'utf8'));
       const result = await executePlan(plan, {
         output: options.output,
-        sourceMetadata: await inspectMedia(plan.source.path),
         overwrite: options.overwrite,
       });
       print({
-        ...result,
+        output: result.output,
         verification: verifyMedia(await inspectMedia(result.output), plan.expectations),
       });
     });

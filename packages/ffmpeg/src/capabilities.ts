@@ -20,7 +20,8 @@ export async function getCapabilities(options: FfmpegOptions = {}): Promise<Ffmp
     return {
       ffmpegVersion: match?.[1] ?? 'unknown',
       encoders: {
-        h264: hasCapability(encoders.stdout, /\b(?:libx264|h264_videotoolbox|h264_nvenc)\b/),
+        // The current compiler emits libx264, so advertise only the implementation it can use.
+        h264: hasCapability(encoders.stdout, /\blibx264\b/),
         hevc: hasCapability(encoders.stdout, /\b(?:libx265|hevc_videotoolbox|hevc_nvenc)\b/),
         av1: hasCapability(encoders.stdout, /\b(?:libaom-av1|libsvtav1|av1_nvenc)\b/),
         aac: hasCapability(encoders.stdout, /\baac\b/),

@@ -21,6 +21,23 @@ export function compilePlan(
       step.operation === 'concatenate',
   );
   if (specialStep !== undefined) return compileSpecial(plan, specialStep, output);
+  if (plan.steps.length === 0) {
+    return {
+      executable: 'ffmpeg',
+      args: [
+        '-hide_banner',
+        '-nostdin',
+        '-y',
+        '-i',
+        plan.source.path,
+        '-map',
+        '0',
+        '-c',
+        'copy',
+        output,
+      ],
+    };
+  }
 
   const args = ['-hide_banner', '-nostdin', '-y'];
   const trim = plan.steps.find((step) => step.operation === 'trim');

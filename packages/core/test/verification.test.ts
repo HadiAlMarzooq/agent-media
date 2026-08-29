@@ -8,7 +8,13 @@ const output = {
   durationSeconds: 30.1,
   container: 'mov',
   sizeBytes: 24_900_000,
-  video: { width: 1080, height: 1920, aspectRatio: '9:16' },
+  video: {
+    width: 1080,
+    height: 1920,
+    aspectRatio: '9:16',
+    codec: 'h264',
+    pixelFormat: 'yuv420p',
+  },
   audio: { present: true },
 };
 
@@ -21,6 +27,8 @@ describe('verification', () => {
       height: 1920,
       maxSizeBytes: 25_000_000,
       audio: 'preserve',
+      videoCodec: 'h264',
+      pixelFormat: 'yuv420p',
     });
     expect(report.passed).toBe(true);
     expect(Object.values(report.checks).every((check) => check.passed)).toBe(true);
@@ -31,9 +39,11 @@ describe('verification', () => {
       aspectRatio: '1:1',
       maxSizeBytes: 1_000,
       audio: 'remove',
+      videoCodec: 'hevc',
+      pixelFormat: 'yuv444p',
     });
     expect(report.passed).toBe(false);
-    expect(report.failures).toHaveLength(3);
+    expect(report.failures).toHaveLength(5);
     expect(report.checks.maxFileSize).toMatchObject({ passed: false, actual: 24_900_000 });
   });
 });

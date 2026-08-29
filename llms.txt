@@ -9,6 +9,9 @@ Agent Media is a deterministic media transformation runtime for software agents.
 - `agent-media` emits JSON for inspect, plan, execute, verify and capabilities.
 - `agent-media-mcp` exposes the same semantic pipeline via five MCP tools over stdio.
 - Inspect plans before execution and verify outputs afterward.
+- Validate unknown plan values with `validatePlan`; JSON parsing and schema failures use `INVALID_PLAN`.
+- MCP execution and verification accept either a plan object or serialized plan JSON.
+- Extraction and concatenation are terminal Media IR v1 operations and cannot be mixed with transforms.
 - The repository and all packages are private pre-public work; do not publish them.
 
-Read `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and package-level API documentation first.
+Read `README.md`, `docs/api.md`, `ARCHITECTURE.md`, and `ROADMAP.md` first.

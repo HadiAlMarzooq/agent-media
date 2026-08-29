@@ -1,16 +1,16 @@
-import { access, constants } from 'node:fs/promises';
+import { access, constants, rm } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 
-import { MediaError } from '@hadialmarzooq/agent-media-core';
+import { MediaError, validatePlan } from '@hadialmarzooq/agent-media-core';
 import type { MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 
 import { compilePlan, type CompiledOperation } from './compiler.js';
-import type { FfmpegOptions } from './inspect.js';
+import { inspectMedia, type FfmpegOptions } from './inspect.js';
 import { runProcess } from './process.js';
 
 export interface ExecuteOptions extends FfmpegOptions {
   output: string;
-  sourceMetadata: MediaMetadata;
+  sourceMetadata?: MediaMetadata;
   overwrite?: boolean;
   allowedOutputDirectory?: string;
   signal?: AbortSignal;
@@ -22,9 +22,10 @@ export interface ExecutionResult {
 }
 
 export async function executePlan(
-  plan: MediaPlan,
+  planInput: MediaPlan,
   options: ExecuteOptions,
 ): Promise<ExecutionResult> {
+  const plan = validatePlan(planInput);
   const output = resolve(options.output);
   if (output === resolve(plan.source.path)) {
     throw new MediaError({
@@ -53,12 +54,38 @@ export async function executePlan(
       suggestedActions: ['Choose a different output path or explicitly enable overwrite.'],
     });
   }
-  const operation = compilePlan(plan, options.sourceMetadata, output);
-  const result = await runProcess(options.ffmpegPath ?? operation.executable, operation.args, {
-    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
+  const sourceMetadata =
+    options.sourceMetadata ??
+    (await inspectMedia(plan.source.path, {
+      ...(options.ffprobePath === undefined ? {} : { ffprobePath: options.ffprobePath }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    }));
+  if (resolve(sourceMetadata.path) !== resolve(plan.source.path)) {
+    throw new MediaError({
+      code: 'INVALID_PLAN',
+      message: 'Source metadata does not describe the Media Plan source.',
+      context: { planSource: plan.source.path, metadataSource: sourceMetadata.path },
+      suggestedActions: ['Inspect the planned source and pass that metadata to executePlan.'],
+    });
+  }
+  const operation = compilePlan(plan, sourceMetadata, output);
+  let result;
+  try {
+    result = await runProcess(options.ffmpegPath ?? operation.executable, operation.args, {
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+  } catch (error) {
+    throw new MediaError({
+      code: 'FFMPEG_NOT_FOUND',
+      message: 'FFmpeg could not be started for plan execution.',
+      context: { executable: options.ffmpegPath ?? operation.executable },
+      suggestedActions: ['Install FFmpeg and ensure ffmpeg is on PATH.'],
+      debug: { backend: 'ffmpeg', stderr: error instanceof Error ? error.message : String(error) },
+    });
+  }
   if (result.aborted) {
+    await removePartialOutput(output);
     throw new MediaError({
       code: 'OPERATION_CANCELLED',
       message: 'Media execution was cancelled.',
@@ -67,6 +94,7 @@ export async function executePlan(
     });
   }
   if (result.timedOut) {
+    await removePartialOutput(output);
     throw new MediaError({
       code: 'OPERATION_TIMEOUT',
       message: 'Media execution exceeded its configured timeout.',
@@ -76,6 +104,7 @@ export async function executePlan(
     });
   }
   if (result.exitCode !== 0) {
+    await removePartialOutput(output);
     throw new MediaError({
       code: 'EXECUTION_FAILED',
       message: 'FFmpeg could not execute the media plan.',
@@ -85,6 +114,14 @@ export async function executePlan(
     });
   }
   return { output, operation };
+}
+
+async function removePartialOutput(path: string): Promise<void> {
+  try {
+    await rm(path, { force: true });
+  } catch {
+    // Preserve the primary execution error; cleanup is best effort.
+  }
 }
 
 async function exists(path: string): Promise<boolean> {

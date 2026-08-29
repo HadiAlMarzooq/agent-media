@@ -17,6 +17,7 @@ interface ProbeStream {
   width?: number;
   height?: number;
   r_frame_rate?: string;
+  pix_fmt?: string;
   sample_rate?: string;
   channels?: number;
   tags?: { rotate?: string };
@@ -86,7 +87,13 @@ export async function inspectMedia(
   const audioStream = streams.find((stream) => stream.codec_type === 'audio');
   const video = normalizeVideo(videoStream);
   const audio = normalizeAudio(audioStream);
-  const kind: MediaKind = video ? 'video' : audio.present ? 'audio' : 'unknown';
+  const kind: MediaKind = video
+    ? probe.format?.format_name?.split(',').includes('image2')
+      ? 'image'
+      : 'video'
+    : audio.present
+      ? 'audio'
+      : 'unknown';
 
   const durationSeconds = toFiniteNumber(probe.format?.duration);
   return {
@@ -113,6 +120,7 @@ function normalizeVideo(stream: ProbeStream | undefined): VideoStreamMetadata | 
     aspectRatio: simplifyAspectRatio(stream.width, stream.height),
     ...(fps === undefined ? {} : { fps }),
     ...(stream.codec_name === undefined ? {} : { codec: stream.codec_name }),
+    ...(stream.pix_fmt === undefined ? {} : { pixelFormat: stream.pix_fmt }),
     ...(rotation === undefined && tagRotation === undefined
       ? {}
       : { rotationDegrees: Math.round(rotation ?? tagRotation ?? 0) }),

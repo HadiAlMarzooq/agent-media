@@ -1,6 +1,6 @@
 # Pre-public readiness review
 
-Reviewed: 2026-08-29. This is an internal readiness review only. The repository stays private and
+Reviewed: 2026-08-30. This is an internal readiness review only. The repository stays private and
 no package has been published.
 
 ## Product and API audit
@@ -11,6 +11,9 @@ no package has been published.
   with a JSON Schema.
 - The first pre-public API deliberately remains `0.0.x`; no compatibility guarantee is made.
 - CLI and MCP expose the same compact five-operation surface and return JSON.
+- SDK, persisted JSON, CLI, and MCP now run the same real-FFmpeg dogfood path in tests.
+- Every plan boundary returns stable `INVALID_PLAN` errors, and unsupported Media IR v1 operation
+  combinations are rejected rather than partially executed.
 
 ## Competitive and naming audit
 
@@ -26,6 +29,8 @@ lookup is not a reservation: confirm scope ownership before any publication.
 - Format, lint, strict typecheck, build, real-FFmpeg integration tests, and production dependency
   audit pass locally.
 - CI validates Linux, macOS, and Windows and installs FFmpeg where needed.
+- Compatibility verification checks the actual H.264 codec and `yuv420p` pixel format, not only
+  process success.
 - MIT licensing, third-party dependency review, security reporting policy, contribution guidance,
   Code of Conduct, Changesets, and release tags are present.
 

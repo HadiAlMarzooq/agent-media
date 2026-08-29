@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm } from 'node:fs/promises';
+import { access, copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -68,5 +68,40 @@ describe('execution hardening', () => {
     ).rejects.toMatchObject({
       code: 'OUTPUT_EXISTS',
     });
+  });
+
+  it('validates plans and source metadata at the execution boundary', async () => {
+    const output = join(directory, 'invalid.mp4');
+    await expect(
+      executePlan(
+        {
+          ...plan(),
+          steps: [
+            { id: 'audio', operation: 'extract-audio', format: 'm4a', reason: 'test' },
+            { id: 'encode', operation: 'encode', profile: 'balanced', reason: 'test' },
+          ],
+        },
+        { output, sourceMetadata: metadata },
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_PLAN' });
+
+    await expect(
+      executePlan(plan(), {
+        output,
+        sourceMetadata: { ...metadata, path: join(directory, 'different.mp4') },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_PLAN' });
+  });
+
+  it('removes partial outputs after backend failure', async () => {
+    const output = join(directory, 'partial.mp4');
+    await expect(
+      executePlan(plan(), {
+        output,
+        sourceMetadata: metadata,
+        ffmpegPath: process.execPath,
+      }),
+    ).rejects.toMatchObject({ code: 'EXECUTION_FAILED' });
+    await expect(access(output)).rejects.toBeDefined();
   });
 });

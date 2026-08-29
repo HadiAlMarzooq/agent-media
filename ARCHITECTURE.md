@@ -20,8 +20,14 @@ choices belong to the compiler and are recorded as explainable decisions.
 reasons, and verification expectations. It deliberately contains no FFmpeg flags or filter graphs.
 Use `serializePlan` and `parsePlan` to move plans safely across interfaces.
 
+Every public runtime boundary validates Media IR again. Plans require unique step IDs, and Media IR
+v1 treats extraction and concatenation as terminal operations that cannot be mixed with transforms.
+Rejecting an unsupported composition is preferable to silently dropping a step. Execution also
+inspects the declared plan source itself unless a matching normalized metadata value is supplied.
+
 The FFmpeg compiler translates that stable IR to arguments only at execution time. It does not
-expose those arguments through the public planning API.
+expose those arguments through the public planning API, CLI, or MCP adapter. The backend package
+retains its compiled operation in execution results for local diagnostics.
 
 Verification consumes a fresh normalized inspection of the output and returns checks plus
 actionable failures. A process exit code alone never determines success.

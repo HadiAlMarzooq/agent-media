@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
+import { MediaError } from './errors.js';
+
 export const aspectRatioSchema = z
   .string()
-  .regex(/^\d+:\d+$/, 'Aspect ratio must use the form width:height.')
-  .refine(
-    (value) => value.split(':').every((part) => Number(part) > 0),
-    'Aspect ratio values must be positive.',
-  );
+  .regex(/^[1-9]\d*:[1-9]\d*$/, 'Aspect ratio must use positive width:height values.');
 
 const stepBase = z.object({ id: z.string().min(1), reason: z.string().min(1) });
 
@@ -54,29 +52,151 @@ export const expectationsSchema = z.object({
   maxSizeBytes: z.number().positive().optional(),
   audio: z.enum(['preserve', 'remove', 'required']).optional(),
   container: z.string().min(1).optional(),
+  videoCodec: z.string().min(1).optional(),
+  pixelFormat: z.string().min(1).optional(),
 });
 
 /** Version 1 of the portable, semantic media plan. */
-export const mediaPlanSchema = z.object({
-  irVersion: z.literal('1'),
-  source: z.object({ path: z.string().min(1) }),
-  constraints: z.object({
-    maxSizeMB: z.number().positive().optional(),
-    compatibility: z.enum(['high', 'balanced']).optional(),
-    quality: z.enum(['high', 'balanced', 'small']).optional(),
-  }),
-  steps: z.array(mediaStepSchema),
-  expectations: expectationsSchema,
-});
+export const mediaPlanSchema = z
+  .object({
+    irVersion: z.literal('1'),
+    source: z.object({ path: z.string().min(1) }),
+    constraints: z.object({
+      maxSizeMB: z.number().positive().optional(),
+      compatibility: z.enum(['high', 'balanced']).optional(),
+      quality: z.enum(['high', 'balanced', 'small']).optional(),
+    }),
+    steps: z.array(mediaStepSchema),
+    expectations: expectationsSchema,
+  })
+  .superRefine((plan, context) => {
+    const ids = new Set<string>();
+    const operations = new Set<string>();
+    const order = new Map([
+      ['trim', 0],
+      ['reframe', 1],
+      ['resize', 2],
+      ['encode', 3],
+    ]);
+    let previousOrder = -1;
+    for (const [index, step] of plan.steps.entries()) {
+      if (ids.has(step.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['steps', index, 'id'],
+          message: `Step id must be unique: ${step.id}.`,
+        });
+      }
+      ids.add(step.id);
+      if (operations.has(step.operation)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['steps', index, 'operation'],
+          message: `Media IR v1 allows at most one ${step.operation} step.`,
+        });
+      }
+      operations.add(step.operation);
+
+      const stepOrder = order.get(step.operation);
+      if (stepOrder !== undefined && stepOrder < previousOrder) {
+        context.addIssue({
+          code: 'custom',
+          path: ['steps', index, 'operation'],
+          message: 'Transform steps must be ordered as trim, reframe, resize, then encode.',
+        });
+      }
+      if (stepOrder !== undefined) previousOrder = stepOrder;
+    }
+
+    const terminalSteps = plan.steps.filter((step) =>
+      ['extract-audio', 'extract-frame', 'concatenate'].includes(step.operation),
+    );
+    if (terminalSteps.length > 0 && plan.steps.length > 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['steps'],
+        message:
+          'Extraction and concatenation operations cannot be combined with other steps in Media IR v1.',
+      });
+    }
+
+    const encode = plan.steps.find((step) => step.operation === 'encode');
+    if (plan.constraints.maxSizeMB !== undefined) {
+      if (encode?.operation !== 'encode' || encode.maxSizeMB !== plan.constraints.maxSizeMB) {
+        context.addIssue({
+          code: 'custom',
+          path: ['constraints', 'maxSizeMB'],
+          message: 'Maximum-size constraints require a matching encode step.',
+        });
+      }
+      if (plan.expectations.maxSizeBytes !== plan.constraints.maxSizeMB * 1_000_000) {
+        context.addIssue({
+          code: 'custom',
+          path: ['expectations', 'maxSizeBytes'],
+          message: 'Maximum-size constraints require a matching byte expectation.',
+        });
+      }
+    }
+    if (plan.constraints.compatibility === 'high') {
+      if (encode?.operation !== 'encode' || encode.profile !== 'high-compatibility') {
+        context.addIssue({
+          code: 'custom',
+          path: ['constraints', 'compatibility'],
+          message: 'High compatibility requires a high-compatibility encode step.',
+        });
+      }
+      if (plan.expectations.videoCodec !== 'h264' || plan.expectations.pixelFormat !== 'yuv420p') {
+        context.addIssue({
+          code: 'custom',
+          path: ['expectations'],
+          message: 'High compatibility requires H.264 and yuv420p verification expectations.',
+        });
+      }
+    }
+  });
 
 export type MediaStep = z.infer<typeof mediaStepSchema>;
 export type MediaExpectations = z.infer<typeof expectationsSchema>;
 export type MediaPlan = z.infer<typeof mediaPlanSchema>;
 
 export function serializePlan(plan: MediaPlan): string {
-  return JSON.stringify(mediaPlanSchema.parse(plan), null, 2);
+  return JSON.stringify(validatePlan(plan), null, 2);
 }
 
 export function parsePlan(serialized: string): MediaPlan {
-  return mediaPlanSchema.parse(JSON.parse(serialized));
+  let value: unknown;
+  try {
+    value = JSON.parse(serialized);
+  } catch (error) {
+    throw invalidPlan('Media Plan is not valid JSON.', error);
+  }
+  return validatePlan(value);
+}
+
+/** Validate an unknown value at a public Media IR boundary. */
+export function validatePlan(value: unknown): MediaPlan {
+  const parsed = mediaPlanSchema.safeParse(value);
+  if (!parsed.success) {
+    throw invalidPlan('Media Plan does not match Media IR version 1.', parsed.error);
+  }
+  return parsed.data;
+}
+
+function invalidPlan(message: string, error: unknown): MediaError {
+  return new MediaError({
+    code: 'INVALID_PLAN',
+    message,
+    context: {
+      issues:
+        error instanceof z.ZodError
+          ? error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }))
+          : [
+              {
+                path: '',
+                message: error instanceof Error ? error.message : String(error),
+              },
+            ],
+    },
+    suggestedActions: ['Create or serialize the plan with the Agent Media planning API.'],
+  });
 }

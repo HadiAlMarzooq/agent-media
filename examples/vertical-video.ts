@@ -6,7 +6,7 @@ const plan = planMedia({
   source,
   goals: { aspectRatio: '9:16', compatibility: 'high', maxSizeMB: 25 },
 });
-const execution = await executePlan(plan, { output: 'vertical.mp4', sourceMetadata: source });
+const execution = await executePlan(plan, { output: 'vertical.mp4' });
 const verification = verifyMedia(await inspectMedia(execution.output), plan.expectations);
 
 console.log(JSON.stringify({ plan, execution, verification }, null, 2));

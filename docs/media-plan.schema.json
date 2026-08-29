@@ -3,37 +3,163 @@
   "$id": "https://agent-media.local/schemas/media-plan-v1.json",
   "title": "Agent Media Plan v1",
   "type": "object",
+  "additionalProperties": false,
   "required": ["irVersion", "source", "constraints", "steps", "expectations"],
   "properties": {
     "irVersion": { "const": "1" },
     "source": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["path"],
       "properties": { "path": { "type": "string", "minLength": 1 } }
     },
-    "constraints": { "type": "object" },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxSizeMB": { "type": "number", "exclusiveMinimum": 0 },
+        "compatibility": { "enum": ["high", "balanced"] },
+        "quality": { "enum": ["high", "balanced", "small"] }
+      }
+    },
     "steps": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["id", "operation", "reason"],
-        "properties": {
-          "id": { "type": "string" },
-          "operation": {
-            "enum": [
-              "trim",
-              "reframe",
-              "resize",
-              "encode",
-              "extract-audio",
-              "extract-frame",
-              "concatenate"
-            ]
-          },
-          "reason": { "type": "string" }
-        }
+        "oneOf": [
+          { "$ref": "#/$defs/trim" },
+          { "$ref": "#/$defs/reframe" },
+          { "$ref": "#/$defs/resize" },
+          { "$ref": "#/$defs/encode" },
+          { "$ref": "#/$defs/extractAudio" },
+          { "$ref": "#/$defs/extractFrame" },
+          { "$ref": "#/$defs/concatenate" }
+        ]
       }
     },
-    "expectations": { "type": "object" }
+    "expectations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "aspectRatio": { "$ref": "#/$defs/aspectRatio" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "maxSizeBytes": { "type": "number", "exclusiveMinimum": 0 },
+        "audio": { "enum": ["preserve", "remove", "required"] },
+        "container": { "type": "string", "minLength": 1 },
+        "videoCodec": { "type": "string", "minLength": 1 },
+        "pixelFormat": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "steps": {
+            "contains": {
+              "type": "object",
+              "properties": {
+                "operation": { "enum": ["extract-audio", "extract-frame", "concatenate"] }
+              },
+              "required": ["operation"]
+            }
+          }
+        }
+      },
+      "then": { "properties": { "steps": { "maxItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "aspectRatio": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
+    },
+    "trim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "startSeconds"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "trim" },
+        "reason": { "type": "string", "minLength": 1 },
+        "startSeconds": { "type": "number", "minimum": 0 },
+        "endSeconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "reframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "aspectRatio", "strategy"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "reframe" },
+        "reason": { "type": "string", "minLength": 1 },
+        "aspectRatio": { "$ref": "#/$defs/aspectRatio" },
+        "strategy": { "const": "center" }
+      }
+    },
+    "resize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "width", "height"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "resize" },
+        "reason": { "type": "string", "minLength": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "encode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "profile"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "encode" },
+        "reason": { "type": "string", "minLength": 1 },
+        "profile": { "enum": ["high-compatibility", "balanced", "high-quality"] },
+        "maxSizeMB": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "extractAudio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "format"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "extract-audio" },
+        "reason": { "type": "string", "minLength": 1 },
+        "format": { "enum": ["m4a", "mp3", "wav"] }
+      }
+    },
+    "extractFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "atSeconds", "format"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "extract-frame" },
+        "reason": { "type": "string", "minLength": 1 },
+        "atSeconds": { "type": "number", "minimum": 0 },
+        "format": { "enum": ["jpg", "png"] }
+      }
+    },
+    "concatenate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "reason", "inputs"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "const": "concatenate" },
+        "reason": { "type": "string", "minLength": 1 },
+        "inputs": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
   }
 }

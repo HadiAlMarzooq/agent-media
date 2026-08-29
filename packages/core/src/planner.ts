@@ -1,4 +1,5 @@
 import { MediaError } from './errors.js';
+import { aspectRatioSchema, validatePlan } from './ir.js';
 import type { FfmpegCapabilities, MediaMetadata } from './media.js';
 import type { MediaPlan, MediaStep } from './ir.js';
 
@@ -97,7 +98,7 @@ export function planMedia(request: PlanRequest): MediaPlan {
       reason: 'The caller requested multiple media sources joined in sequence.',
     });
   } else if (requiresEncoding(goals)) {
-    assertCodecCapability(request.capabilities, goals);
+    assertCodecCapability(request.capabilities, goals, source);
     steps.push({
       id: `encode-${steps.length + 1}`,
       operation: 'encode',
@@ -107,16 +108,20 @@ export function planMedia(request: PlanRequest): MediaPlan {
     });
   }
   if (goals.maxSizeMB !== undefined) expectations.maxSizeBytes = goals.maxSizeMB * 1_000_000;
+  if (goals.compatibility === 'high') {
+    expectations.videoCodec = 'h264';
+    expectations.pixelFormat = 'yuv420p';
+  }
   if (goals.audio === 'remove') expectations.audio = 'remove';
   else if (goals.audio === 'preserve') expectations.audio = 'preserve';
 
-  return {
+  return validatePlan({
     irVersion: '1',
     source: { path: source.path },
     constraints: pickConstraints(goals),
     steps,
     expectations,
-  };
+  });
 }
 
 function validateGoals({ source, goals }: PlanRequest): void {
@@ -124,6 +129,14 @@ function validateGoals({ source, goals }: PlanRequest): void {
     fail('The source has no usable audio or video stream.', { source: source.path });
   if (goals.trimStartSeconds !== undefined && goals.trimStartSeconds < 0)
     fail('Trim start must be non-negative.');
+  if (goals.trimStartSeconds !== undefined && !Number.isFinite(goals.trimStartSeconds))
+    fail('Trim start must be a finite number.');
+  if (goals.trimEndSeconds !== undefined && !Number.isFinite(goals.trimEndSeconds))
+    fail('Trim end must be a finite number.');
+  if (goals.durationSeconds !== undefined && !(goals.durationSeconds > 0))
+    fail('Duration must be positive.');
+  if (goals.durationSeconds !== undefined && goals.trimEndSeconds !== undefined)
+    fail('Duration and trim end cannot both define the output range.');
   if (
     goals.trimEndSeconds !== undefined &&
     goals.trimStartSeconds !== undefined &&
@@ -134,13 +147,102 @@ function validateGoals({ source, goals }: PlanRequest): void {
     fail('Width and height must be provided together.');
   if (
     goals.width !== undefined &&
-    (goals.width <= 0 || goals.height === undefined || goals.height <= 0)
+    (!Number.isInteger(goals.width) ||
+      goals.width <= 0 ||
+      goals.height === undefined ||
+      !Number.isInteger(goals.height) ||
+      goals.height <= 0)
   )
-    fail('Output dimensions must be positive.');
+    fail('Output dimensions must be positive integers.');
+  if (goals.maxSizeMB !== undefined && !(goals.maxSizeMB > 0))
+    fail('Maximum file size must be positive.');
+  if (
+    goals.durationSeconds !== undefined &&
+    source.durationSeconds === undefined &&
+    goals.trimEndSeconds === undefined
+  )
+    fail('A duration goal requires a source with a known duration.');
+  const requestedEnd =
+    goals.trimEndSeconds ??
+    (goals.durationSeconds === undefined
+      ? undefined
+      : (goals.trimStartSeconds ?? 0) + goals.durationSeconds);
+  if (
+    source.durationSeconds !== undefined &&
+    requestedEnd !== undefined &&
+    requestedEnd > source.durationSeconds
+  )
+    fail('The requested time range extends beyond the source duration.', {
+      requestedEnd,
+      sourceDuration: source.durationSeconds,
+    });
+  if (
+    source.durationSeconds !== undefined &&
+    goals.trimStartSeconds !== undefined &&
+    goals.trimStartSeconds >= source.durationSeconds
+  )
+    fail('Trim start must be before the end of the source.');
+  if (goals.maxSizeMB !== undefined && source.durationSeconds === undefined)
+    fail('Maximum-size planning requires a source with a known duration.');
+  if (goals.aspectRatio !== undefined && !aspectRatioSchema.safeParse(goals.aspectRatio).success)
+    fail('Aspect ratio must contain positive width and height values, such as 9:16.');
+  if (
+    goals.aspectRatio !== undefined &&
+    goals.width !== undefined &&
+    goals.height !== undefined &&
+    !dimensionsMatchAspectRatio(goals.width, goals.height, goals.aspectRatio)
+  )
+    fail('Explicit dimensions must match the requested aspect ratio.');
+  if (
+    source.video === undefined &&
+    (goals.aspectRatio !== undefined ||
+      goals.width !== undefined ||
+      goals.extractFrame !== undefined)
+  )
+    fail('The requested visual operation requires a video stream.', { source: source.path });
+  if (goals.extractAudio !== undefined && !source.audio.present)
+    fail('Audio extraction requires an audio stream.', { source: source.path });
+  if (goals.audio === 'preserve' && !source.audio.present)
+    fail('Audio cannot be preserved because the source has no audio stream.', {
+      source: source.path,
+    });
   if (goals.extractAudio !== undefined && goals.extractFrame !== undefined)
     fail('Audio extraction and frame extraction cannot produce the same output.');
   if (goals.concatenate !== undefined && goals.concatenate.length === 0)
     fail('Concatenation requires at least one additional input.');
+  const terminalGoal =
+    goals.extractAudio !== undefined ||
+    goals.extractFrame !== undefined ||
+    goals.concatenate !== undefined;
+  if (terminalGoal && hasTransformGoal(goals)) {
+    fail(
+      'Extraction and concatenation cannot be combined with transformation goals in Media IR v1.',
+    );
+  }
+}
+
+function dimensionsMatchAspectRatio(width: number, height: number, aspectRatio: string): boolean {
+  const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number);
+  return (
+    ratioWidth !== undefined &&
+    ratioHeight !== undefined &&
+    width * ratioHeight === height * ratioWidth
+  );
+}
+
+function hasTransformGoal(goals: MediaGoals): boolean {
+  return (
+    goals.trimStartSeconds !== undefined ||
+    goals.trimEndSeconds !== undefined ||
+    goals.durationSeconds !== undefined ||
+    goals.aspectRatio !== undefined ||
+    goals.width !== undefined ||
+    goals.height !== undefined ||
+    goals.maxSizeMB !== undefined ||
+    goals.compatibility !== undefined ||
+    goals.quality !== undefined ||
+    goals.audio !== undefined
+  );
 }
 
 function fail(message: string, context?: Record<string, unknown>): never {
@@ -177,9 +279,21 @@ function encodingReason(goals: MediaGoals): string {
 function assertCodecCapability(
   capabilities: FfmpegCapabilities | undefined,
   goals: MediaGoals,
+  source: MediaMetadata,
 ): void {
   if (capabilities !== undefined && goals.compatibility === 'high' && !capabilities.encoders.h264) {
     fail('High compatibility requires an available H.264 encoder.', { capability: 'h264' });
+  }
+  if (
+    capabilities !== undefined &&
+    goals.compatibility === 'high' &&
+    source.audio.present &&
+    goals.audio !== 'remove' &&
+    !capabilities.encoders.aac
+  ) {
+    fail('High compatibility with audio requires an available AAC encoder.', {
+      capability: 'aac',
+    });
   }
 }
 

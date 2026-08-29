@@ -79,6 +79,22 @@ export function verifyMedia(
       'Output container does not match the requested container.',
     );
   }
+  if (expectations.videoCodec !== undefined) {
+    checks.videoCodec = check(
+      output.video?.codec === expectations.videoCodec,
+      expectations.videoCodec,
+      output.video?.codec,
+      'Output video codec does not match the requested compatibility profile.',
+    );
+  }
+  if (expectations.pixelFormat !== undefined) {
+    checks.pixelFormat = check(
+      output.video?.pixelFormat === expectations.pixelFormat,
+      expectations.pixelFormat,
+      output.video?.pixelFormat,
+      'Output pixel format does not match the requested compatibility profile.',
+    );
+  }
   const failures = Object.entries(checks)
     .filter(([, result]) => !result.passed)
     .map(([name, result]) => `${name}: ${result.message}`);
@@ -91,5 +107,5 @@ function check(
   actual: unknown,
   message: string,
 ): VerificationCheck {
-  return { passed, expected, actual, message };
+  return { passed, expected, actual, message: passed ? 'Constraint satisfied.' : message };
 }
