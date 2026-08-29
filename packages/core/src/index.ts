@@ -9,3 +9,13 @@ export type {
   MediaMetadata,
   VideoStreamMetadata,
 } from './media.js';
+export {
+  aspectRatioSchema,
+  mediaPlanSchema,
+  mediaStepSchema,
+  parsePlan,
+  serializePlan,
+} from './ir.js';
+export type { MediaExpectations, MediaPlan, MediaStep } from './ir.js';
+export { planMedia } from './planner.js';
+export type { MediaGoals, PlanRequest } from './planner.js';

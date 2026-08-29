@@ -7,7 +7,7 @@ owner explicitly approves publication.
 | ----- | -------------------------------------------------- | ------------ | --------------------------------------------------------------------------- | -------- |
 | 0     | Foundation: workspace, gates, governance, branding | None         | Strict TypeScript, deterministic lockfile, CI, tests, Changesets, templates | Complete |
 | 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Complete |
-| 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Pending  |
+| 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Complete |
 | 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Pending  |
 | 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Pending  |
 | 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Pending  |
@@ -30,6 +30,13 @@ owner explicitly approves publication.
 - [x] Return stable structured errors with recovery suggestions.
 - [x] Cover inspection and capabilities with generated real-FFmpeg fixtures.
 
-### Phase 2–7
+### Phase 2
+
+- [x] Define a serializable, validated Media IR version 1.
+- [x] Plan semantic trim, framing, resize, encoding and extraction intent.
+- [x] Record explicit reasons and expected output constraints.
+- [x] Reject conflicting or unavailable requests with stable errors.
+
+### Phase 3–7
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.

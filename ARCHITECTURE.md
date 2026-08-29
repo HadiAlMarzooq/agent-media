@@ -13,3 +13,9 @@ FFmpeg argument strings.
 
 Media plans express semantic intent such as aspect ratio, quality and compatibility. Backend
 choices belong to the compiler and are recorded as explainable decisions.
+
+## Media IR v1
+
+`MediaPlan` has `irVersion: "1"`, a source path, semantic constraints, ordered operations with
+reasons, and verification expectations. It deliberately contains no FFmpeg flags or filter graphs.
+Use `serializePlan` and `parsePlan` to move plans safely across interfaces.
