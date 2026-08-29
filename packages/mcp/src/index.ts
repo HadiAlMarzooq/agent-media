@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -229,7 +231,7 @@ export async function startMcpServer(): Promise<void> {
   await createMcpServer().connect(new StdioServerTransport());
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule()) {
   startMcpServer().catch((error: unknown) => {
     const output =
       error instanceof MediaError
@@ -241,4 +243,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.stderr.write(`${JSON.stringify(output)}\n`);
     process.exitCode = 1;
   });
+}
+
+function isMainModule(): boolean {
+  if (process.argv[1] === undefined) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
 }

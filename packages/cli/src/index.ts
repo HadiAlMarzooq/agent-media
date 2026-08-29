@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 import { Command } from 'commander';
 import {
@@ -138,7 +140,7 @@ function progressWriter(enabled: boolean): ((progress: MediaProgress) => void) |
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule()) {
   createProgram()
     .parseAsync()
     .catch((error: unknown) => {
@@ -152,4 +154,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.stderr.write(`${JSON.stringify(output)}\n`);
       process.exitCode = 1;
     });
+}
+
+function isMainModule(): boolean {
+  if (process.argv[1] === undefined) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
 }
