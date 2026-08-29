@@ -1,0 +1,10 @@
+name: Bug report
+description: Report reproducible behavior
+labels: [bug]
+body:
+  - type: textarea
+    attributes: { label: What happened, description: Include expected and actual behavior. }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Reproduction, description: Include safe, minimal steps. }
+    validations: { required: true }

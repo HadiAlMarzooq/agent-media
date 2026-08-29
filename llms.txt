@@ -1,0 +1,12 @@
+# Agent Media
+
+Agent Media is a deterministic media transformation runtime for software agents.
+
+- Pipeline: inspect → plan → versioned Media IR → execute → verify.
+- Use semantic goals rather than FFmpeg flags.
+- `@agent-media/core` is protocol-independent and does not depend on MCP.
+- `@agent-media/ffmpeg` is the initial execution backend.
+- Inspect plans before execution and verify outputs afterward.
+- The repository and all packages are private pre-public work; do not publish them.
+
+Read `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and package-level API documentation first.

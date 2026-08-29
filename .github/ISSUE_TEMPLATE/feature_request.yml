@@ -1,0 +1,10 @@
+name: Feature request
+description: Propose a semantic media workflow
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes: { label: Problem, description: Describe the agent or developer workflow. }
+    validations: { required: true }
+  - type: textarea
+    attributes:
+      { label: Proposed semantic API, description: Avoid raw FFmpeg flags where possible. }

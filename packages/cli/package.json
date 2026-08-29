@@ -1,0 +1,23 @@
+{
+  "name": "@agent-media/cli",
+  "version": "0.0.0",
+  "description": "Command-line interface for Agent Media.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agent-media": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@agent-media/core": "workspace:*",
+    "@agent-media/ffmpeg": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit"
+  }
+}
