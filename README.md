@@ -38,3 +38,10 @@ agent-media capabilities
 
 Run `agent-media-mcp` over stdio. It exposes five semantic tools: `inspect_media`, `plan_media`,
 `execute_media_plan`, `verify_media`, and `get_media_capabilities`.
+
+## Safety
+
+Execution never overwrites an existing file unless `overwrite` is explicit, and it always rejects
+using the source path as output. Embedders can restrict results with `allowedOutputDirectory`, and
+can stop a run with an `AbortSignal` or a timeout. Size verification permits a documented 2%
+tolerance because encoding output cannot be estimated exactly.

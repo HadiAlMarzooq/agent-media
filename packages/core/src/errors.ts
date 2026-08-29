@@ -8,7 +8,8 @@ export type MediaErrorCode =
   | 'VERIFICATION_FAILED'
   | 'PATH_NOT_ALLOWED'
   | 'OUTPUT_EXISTS'
-  | 'OPERATION_TIMEOUT';
+  | 'OPERATION_TIMEOUT'
+  | 'OPERATION_CANCELLED';
 
 export interface MediaErrorDetails {
   code: MediaErrorCode;

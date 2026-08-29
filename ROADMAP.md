@@ -11,7 +11,7 @@ owner explicitly approves publication.
 | 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Complete |
 | 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Complete |
 | 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Complete |
-| 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Pending  |
+| 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Complete |
 | 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Pending  |
 
 ## Phase tasks
@@ -58,6 +58,15 @@ owner explicitly approves publication.
 - [x] Add a versioned Media Plan JSON Schema and executable examples.
 - [x] Expand llms.txt and README usage guidance.
 
-### Phase 6–7
+### Phase 6
+
+- [x] Support cancellation and classify timeout failures.
+- [x] Reject source overwrite, output collisions and configurable output-directory escape.
+- [x] Avoid temporary concat list files; document process and dependency security boundaries.
+- [x] Add Linux, macOS and Windows CI coverage with FFmpeg installation.
+
+### Phase 7
+
+- [ ] Complete the pre-public readiness review without changing visibility or publishing packages.
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.

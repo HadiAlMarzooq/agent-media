@@ -14,6 +14,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "audit:prod": "pnpm audit --prod",
     "test:watch": "vitest",
     "changeset": "changeset",
     "version-packages": "changeset version"
