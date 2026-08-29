@@ -37,10 +37,10 @@ importers:
 
   packages/cli:
     dependencies:
-      '@agent-media/core':
+      '@hadialmarzooq/agent-media-core':
         specifier: workspace:*
         version: link:../core
-      '@agent-media/ffmpeg':
+      '@hadialmarzooq/agent-media-ffmpeg':
         specifier: workspace:*
         version: link:../ffmpeg
       commander:
@@ -55,16 +55,16 @@ importers:
 
   packages/ffmpeg:
     dependencies:
-      '@agent-media/core':
+      '@hadialmarzooq/agent-media-core':
         specifier: workspace:*
         version: link:../core
 
   packages/mcp:
     dependencies:
-      '@agent-media/core':
+      '@hadialmarzooq/agent-media-core':
         specifier: workspace:*
         version: link:../core
-      '@agent-media/ffmpeg':
+      '@hadialmarzooq/agent-media-ffmpeg':
         specifier: workspace:*
         version: link:../ffmpeg
       '@modelcontextprotocol/sdk':

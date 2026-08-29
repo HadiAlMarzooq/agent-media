@@ -1,5 +1,5 @@
-import { MediaError } from '@agent-media/core';
-import type { FfmpegCapabilities } from '@agent-media/core';
+import { MediaError } from '@hadialmarzooq/agent-media-core';
+import type { FfmpegCapabilities } from '@hadialmarzooq/agent-media-core';
 
 import type { FfmpegOptions } from './inspect.js';
 import { runProcess } from './process.js';

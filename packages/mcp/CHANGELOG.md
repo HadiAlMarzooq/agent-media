@@ -1,4 +1,4 @@
-# @agent-media/mcp
+# @hadialmarzooq/agent-media-mcp
 
 ## 0.0.7
 

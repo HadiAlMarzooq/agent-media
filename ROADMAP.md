@@ -12,7 +12,7 @@ owner explicitly approves publication.
 | 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Complete |
 | 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Complete |
 | 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Complete |
-| 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Pending  |
+| 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Complete |
 
 ## Phase tasks
 
@@ -67,6 +67,6 @@ owner explicitly approves publication.
 
 ### Phase 7
 
-- [ ] Complete the pre-public readiness review without changing visibility or publishing packages.
+- [x] Complete the pre-public readiness review without changing visibility or publishing packages.
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.

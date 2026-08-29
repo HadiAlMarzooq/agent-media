@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { MediaError, parsePlan, planMedia, verifyMedia } from '@agent-media/core';
-import type { MediaGoals } from '@agent-media/core';
-import { executePlan, getCapabilities, inspectMedia } from '@agent-media/ffmpeg';
+import { MediaError, parsePlan, planMedia, verifyMedia } from '@hadialmarzooq/agent-media-core';
+import type { MediaGoals } from '@hadialmarzooq/agent-media-core';
+import { executePlan, getCapabilities, inspectMedia } from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
 
 const goalSchema = z.object({

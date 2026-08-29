@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@agent-media/core": ["../core/src/index.ts"],
-      "@agent-media/ffmpeg": ["../ffmpeg/src/index.ts"]
+      "@hadialmarzooq/agent-media-core": ["../core/src/index.ts"],
+      "@hadialmarzooq/agent-media-ffmpeg": ["../ffmpeg/src/index.ts"]
     }
   },
   "include": ["src", "test"]

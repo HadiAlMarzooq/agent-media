@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { verifyMedia } from '@agent-media/core';
+import { verifyMedia } from '@hadialmarzooq/agent-media-core';
 
 import { executePlan, inspectMedia } from '../src/index.js';
 import { runProcess } from '../src/process.js';

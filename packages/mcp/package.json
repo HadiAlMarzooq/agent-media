@@ -1,5 +1,5 @@
 {
-  "name": "@agent-media/mcp",
+  "name": "@hadialmarzooq/agent-media-mcp",
   "version": "0.0.7",
   "description": "MCP adapter for Agent Media.",
   "license": "MIT",
@@ -13,8 +13,8 @@
     "dist"
   ],
   "dependencies": {
-    "@agent-media/core": "workspace:*",
-    "@agent-media/ffmpeg": "workspace:*",
+    "@hadialmarzooq/agent-media-core": "workspace:*",
+    "@hadialmarzooq/agent-media-ffmpeg": "workspace:*",
     "@modelcontextprotocol/sdk": "1.30.0",
     "zod": "^4.5.4"
   },

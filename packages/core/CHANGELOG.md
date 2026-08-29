@@ -1,4 +1,4 @@
-# @agent-media/core
+# @hadialmarzooq/agent-media-core
 
 ## 0.0.5
 

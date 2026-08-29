@@ -1,7 +1,7 @@
 import { extname } from 'node:path';
 
-import { MediaError } from '@agent-media/core';
-import type { MediaMetadata, MediaPlan, MediaStep } from '@agent-media/core';
+import { MediaError } from '@hadialmarzooq/agent-media-core';
+import type { MediaMetadata, MediaPlan, MediaStep } from '@hadialmarzooq/agent-media-core';
 
 export interface CompiledOperation {
   executable: string;

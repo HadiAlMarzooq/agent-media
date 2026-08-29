@@ -2,8 +2,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 import { Command } from 'commander';
-import { MediaError, parsePlan, planMedia, serializePlan, verifyMedia } from '@agent-media/core';
-import { executePlan, getCapabilities, inspectMedia } from '@agent-media/ffmpeg';
+import {
+  MediaError,
+  parsePlan,
+  planMedia,
+  serializePlan,
+  verifyMedia,
+} from '@hadialmarzooq/agent-media-core';
+import { executePlan, getCapabilities, inspectMedia } from '@hadialmarzooq/agent-media-ffmpeg';
 
 export function createProgram(): Command {
   const program = new Command();

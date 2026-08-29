@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "paths": { "@agent-media/core": ["../core/src/index.ts"] } },
+  "compilerOptions": { "paths": { "@hadialmarzooq/agent-media-core": ["../core/src/index.ts"] } },
   "include": ["src", "test"]
 }

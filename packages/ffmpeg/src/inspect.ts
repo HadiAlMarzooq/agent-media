@@ -1,13 +1,13 @@
 import { stat } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 
-import { MediaError } from '@agent-media/core';
+import { MediaError } from '@hadialmarzooq/agent-media-core';
 import type {
   AudioStreamMetadata,
   MediaKind,
   MediaMetadata,
   VideoStreamMetadata,
-} from '@agent-media/core';
+} from '@hadialmarzooq/agent-media-core';
 
 import { runProcess } from './process.js';
 

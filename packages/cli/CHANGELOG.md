@@ -1,4 +1,4 @@
-# @agent-media/cli
+# @hadialmarzooq/agent-media-cli
 
 ## 0.0.7
 

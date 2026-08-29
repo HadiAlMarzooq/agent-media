@@ -1,8 +1,8 @@
 import { access, constants } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 
-import { MediaError } from '@agent-media/core';
-import type { MediaMetadata, MediaPlan } from '@agent-media/core';
+import { MediaError } from '@hadialmarzooq/agent-media-core';
+import type { MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 
 import { compilePlan, type CompiledOperation } from './compiler.js';
 import type { FfmpegOptions } from './inspect.js';

@@ -1,5 +1,5 @@
-import { planMedia, verifyMedia } from '@agent-media/core';
-import { executePlan, inspectMedia } from '@agent-media/ffmpeg';
+import { planMedia, verifyMedia } from '@hadialmarzooq/agent-media-core';
+import { executePlan, inspectMedia } from '@hadialmarzooq/agent-media-ffmpeg';
 
 const source = await inspectMedia('demo.mp4');
 const plan = planMedia({

@@ -1,4 +1,4 @@
-# @agent-media/ffmpeg
+# @hadialmarzooq/agent-media-ffmpeg
 
 ## 0.0.6
 

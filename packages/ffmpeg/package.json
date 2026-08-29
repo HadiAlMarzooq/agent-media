@@ -1,5 +1,5 @@
 {
-  "name": "@agent-media/ffmpeg",
+  "name": "@hadialmarzooq/agent-media-ffmpeg",
   "version": "0.0.6",
   "description": "FFmpeg execution backend for Agent Media.",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "dist"
   ],
   "dependencies": {
-    "@agent-media/core": "workspace:*"
+    "@hadialmarzooq/agent-media-core": "workspace:*"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
