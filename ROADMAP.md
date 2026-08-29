@@ -8,7 +8,7 @@ owner explicitly approves publication.
 | 0     | Foundation: workspace, gates, governance, branding | None         | Strict TypeScript, deterministic lockfile, CI, tests, Changesets, templates | Complete |
 | 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Complete |
 | 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Complete |
-| 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Pending  |
+| 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Complete |
 | 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Pending  |
 | 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Pending  |
 | 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Pending  |
@@ -37,6 +37,13 @@ owner explicitly approves publication.
 - [x] Record explicit reasons and expected output constraints.
 - [x] Reject conflicting or unavailable requests with stable errors.
 
-### Phase 3–7
+### Phase 3
+
+- [x] Compile semantic plans into deterministic FFmpeg operations.
+- [x] Execute trim, reframe, resize, transcode/compress, audio/frame extraction and concatenation.
+- [x] Return structured execution failures instead of backend-only output.
+- [x] Test representative operations against generated media with real FFmpeg.
+
+### Phase 4–7
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.

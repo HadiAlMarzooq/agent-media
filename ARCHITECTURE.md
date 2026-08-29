@@ -19,3 +19,6 @@ choices belong to the compiler and are recorded as explainable decisions.
 `MediaPlan` has `irVersion: "1"`, a source path, semantic constraints, ordered operations with
 reasons, and verification expectations. It deliberately contains no FFmpeg flags or filter graphs.
 Use `serializePlan` and `parsePlan` to move plans safely across interfaces.
+
+The FFmpeg compiler translates that stable IR to arguments only at execution time. It does not
+expose those arguments through the public planning API.
