@@ -15,6 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "demo": "pnpm build && node examples/agent-recovery.mjs",
     "benchmark:reliability": "pnpm build && node benchmarks/reliability.mjs",
     "benchmark:compare": "node benchmarks/compare-reliability.mjs",
     "audit:prod": "pnpm audit --prod",
