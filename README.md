@@ -153,6 +153,7 @@ methodology.
 - [API and protocol reference](docs/api.md)
 - [Reliability methodology](docs/reliability.md)
 - [Errors and recovery](docs/errors.md)
+- [Releasing](docs/releasing.md)
 - [Architecture](ARCHITECTURE.md)
 - [Security](SECURITY.md)
 - [Roadmap](ROADMAP.md)

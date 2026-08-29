@@ -3,18 +3,18 @@
 Status is updated as each scoped phase is completed. This repository remains private until the
 owner explicitly approves publication.
 
-| Phase | Scope                                              | Dependencies | Acceptance criteria                                                         | Status      |
-| ----- | -------------------------------------------------- | ------------ | --------------------------------------------------------------------------- | ----------- |
-| 0     | Foundation: workspace, gates, governance, branding | None         | Strict TypeScript, deterministic lockfile, CI, tests, Changesets, templates | Complete    |
-| 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Complete    |
-| 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Complete    |
-| 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Complete    |
-| 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Complete    |
-| 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Complete    |
-| 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Complete    |
-| 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Complete    |
-| 8     | Evidence-driven release hardening                  | 7            | Public-boundary dogfood and verified plan integrity                         | Complete    |
-| 9     | Standout release evidence                          | 8            | Recovery demo, corpus parity, vertical workflow, progress, docs, artifacts  | In progress |
+| Phase | Scope                                              | Dependencies | Acceptance criteria                                                         | Status   |
+| ----- | -------------------------------------------------- | ------------ | --------------------------------------------------------------------------- | -------- |
+| 0     | Foundation: workspace, gates, governance, branding | None         | Strict TypeScript, deterministic lockfile, CI, tests, Changesets, templates | Complete |
+| 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Complete |
+| 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Complete |
+| 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Complete |
+| 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Complete |
+| 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Complete |
+| 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Complete |
+| 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Complete |
+| 8     | Evidence-driven release hardening                  | 7            | Public-boundary dogfood and verified plan integrity                         | Complete |
+| 9     | Standout release evidence                          | 8            | Recovery demo, corpus parity, vertical workflow, progress, docs, artifacts  | Complete |
 
 ## Phase tasks
 
@@ -87,7 +87,7 @@ owner explicitly approves publication.
 - [x] Run a representative reliability corpus and compare semantic fingerprints across CI platforms.
 - [x] Demonstrate failed verification followed by plan serialization, replay, and structured recovery.
 - [x] Replace placeholder documentation with task-focused guides and an original pixel-art identity.
-- [ ] Produce installable, validated GitHub release artifacts through an automated release workflow.
+- [x] Produce installable, validated GitHub release artifacts through an automated release workflow.
 
 Detailed private evidence and competitor tracking remain outside version control. Public release is
 still an explicit owner decision, not an automatic consequence of completing these engineering gates.

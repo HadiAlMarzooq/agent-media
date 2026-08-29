@@ -15,6 +15,7 @@ Start with the guide that matches your task:
 | [API reference](api.md)                          | integrate the TypeScript SDK, CLI, or MCP surface      |
 | [Reliability](reliability.md)                    | understand corpus coverage and cross-platform evidence |
 | [Errors](errors.md)                              | branch on stable failures and choose a recovery        |
+| [Releasing](releasing.md)                        | understand validated artifacts and npm separation      |
 | [Architecture](../ARCHITECTURE.md)               | understand package boundaries and design invariants    |
 | [Security](../SECURITY.md)                       | operate safely with untrusted media and output paths   |
 | [Media Plan JSON Schema](media-plan.schema.json) | validate persisted Media IR outside TypeScript         |
