@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-media.local/schemas/media-plan-v1.json",
+  "title": "Agent Media Plan v1",
+  "type": "object",
+  "required": ["irVersion", "source", "constraints", "steps", "expectations"],
+  "properties": {
+    "irVersion": { "const": "1" },
+    "source": {
+      "type": "object",
+      "required": ["path"],
+      "properties": { "path": { "type": "string", "minLength": 1 } }
+    },
+    "constraints": { "type": "object" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "operation", "reason"],
+        "properties": {
+          "id": { "type": "string" },
+          "operation": {
+            "enum": [
+              "trim",
+              "reframe",
+              "resize",
+              "encode",
+              "extract-audio",
+              "extract-frame",
+              "concatenate"
+            ]
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "expectations": { "type": "object" }
+  }
+}

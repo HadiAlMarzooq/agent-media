@@ -14,7 +14,8 @@
   ],
   "dependencies": {
     "@agent-media/core": "workspace:*",
-    "@agent-media/ffmpeg": "workspace:*"
+    "@agent-media/ffmpeg": "workspace:*",
+    "commander": "15.0.0"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",

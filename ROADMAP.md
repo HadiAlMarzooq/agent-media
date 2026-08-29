@@ -10,7 +10,7 @@ owner explicitly approves publication.
 | 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Complete |
 | 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Complete |
 | 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Complete |
-| 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Pending  |
+| 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Complete |
 | 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Pending  |
 | 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Pending  |
 
@@ -51,6 +51,13 @@ owner explicitly approves publication.
 - [x] Document and apply a 2% maximum-size verification tolerance.
 - [x] Cover passing and failing verification, including real transformed output.
 
-### Phase 5–7
+### Phase 5
+
+- [x] Add JSON-first inspect, plan, execute, verify and capabilities CLI commands.
+- [x] Add MCP stdio adapter with the same five semantic operations.
+- [x] Add a versioned Media Plan JSON Schema and executable examples.
+- [x] Expand llms.txt and README usage guidance.
+
+### Phase 6–7
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.

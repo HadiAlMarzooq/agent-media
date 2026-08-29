@@ -6,6 +6,8 @@ Agent Media is a deterministic media transformation runtime for software agents.
 - Use semantic goals rather than FFmpeg flags.
 - `@agent-media/core` is protocol-independent and does not depend on MCP.
 - `@agent-media/ffmpeg` is the initial execution backend.
+- `agent-media` emits JSON for inspect, plan, execute, verify and capabilities.
+- `agent-media-mcp` exposes the same semantic pipeline via five MCP tools over stdio.
 - Inspect plans before execution and verify outputs afterward.
 - The repository and all packages are private pre-public work; do not publish them.
 

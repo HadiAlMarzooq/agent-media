@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "agent-media": {
+      "command": "agent-media-mcp"
+    }
+  }
+}

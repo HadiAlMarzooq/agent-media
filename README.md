@@ -21,3 +21,20 @@ pnpm test
 
 See [ROADMAP.md](ROADMAP.md) for delivery status and [ARCHITECTURE.md](ARCHITECTURE.md) for
 design boundaries.
+
+## CLI
+
+Every command emits JSON suitable for automation:
+
+```bash
+agent-media inspect demo.mp4
+agent-media plan demo.mp4 --aspect 9:16 --max-size 25 --out plan.json
+agent-media execute plan.json --output vertical.mp4
+agent-media verify vertical.mp4 --against plan.json
+agent-media capabilities
+```
+
+## MCP
+
+Run `agent-media-mcp` over stdio. It exposes five semantic tools: `inspect_media`, `plan_media`,
+`execute_media_plan`, `verify_media`, and `get_media_capabilities`.
