@@ -1,2 +1,3 @@
-/** FFmpeg backend entry point. */
-export const FFMPEG_BACKEND_VERSION = '0.0.0';
+export { getCapabilities } from './capabilities.js';
+export { inspectMedia } from './inspect.js';
+export type { FfmpegOptions } from './inspect.js';

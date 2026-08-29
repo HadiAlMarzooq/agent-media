@@ -6,7 +6,7 @@ owner explicitly approves publication.
 | Phase | Scope                                              | Dependencies | Acceptance criteria                                                         | Status   |
 | ----- | -------------------------------------------------- | ------------ | --------------------------------------------------------------------------- | -------- |
 | 0     | Foundation: workspace, gates, governance, branding | None         | Strict TypeScript, deterministic lockfile, CI, tests, Changesets, templates | Complete |
-| 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Pending  |
+| 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Complete |
 | 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Pending  |
 | 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Pending  |
 | 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Pending  |
@@ -23,6 +23,13 @@ owner explicitly approves publication.
 - [x] Add governance, contribution and automation files.
 - [x] Add release/versioning plumbing and original branding.
 
-### Phase 1–7
+### Phase 1
+
+- [x] Normalize ffprobe stream, format and file-size metadata.
+- [x] Detect FFmpeg encoders, filters and hardware acceleration.
+- [x] Return stable structured errors with recovery suggestions.
+- [x] Cover inspection and capabilities with generated real-FFmpeg fixtures.
+
+### Phase 2–7
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.
