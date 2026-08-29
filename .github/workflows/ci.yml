@@ -38,3 +38,24 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
+      - run: node benchmarks/reliability.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: reliability-${{ runner.os }}
+          path: artifacts/reliability/*.json
+          if-no-files-found: error
+
+  compare-reliability:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: reliability-*
+          path: artifacts/reliability
+          merge-multiple: true
+      - run: node benchmarks/compare-reliability.mjs artifacts/reliability

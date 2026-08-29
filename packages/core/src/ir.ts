@@ -120,6 +120,15 @@ export const mediaPlanSchema = z
       });
     }
 
+    const concatenate = terminalSteps.find((step) => step.operation === 'concatenate');
+    if (concatenate?.operation === 'concatenate' && concatenate.inputs[0] !== plan.source.path) {
+      context.addIssue({
+        code: 'custom',
+        path: ['steps', plan.steps.indexOf(concatenate), 'inputs', 0],
+        message: 'The first concatenation input must match the Media Plan source.',
+      });
+    }
+
     const encode = plan.steps.find((step) => step.operation === 'encode');
     if (plan.constraints.maxSizeMB !== undefined) {
       if (encode?.operation !== 'encode' || encode.maxSizeMB !== plan.constraints.maxSizeMB) {

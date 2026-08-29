@@ -20,7 +20,7 @@ export function compilePlan(
       step.operation === 'extract-frame' ||
       step.operation === 'concatenate',
   );
-  if (specialStep !== undefined) return compileSpecial(plan, specialStep, output);
+  if (specialStep !== undefined) return compileSpecial(plan, specialStep, source, output);
   if (plan.steps.length === 0) {
     return {
       executable: 'ffmpeg',
@@ -60,7 +60,12 @@ export function compilePlan(
   return { executable: 'ffmpeg', args };
 }
 
-function compileSpecial(plan: MediaPlan, step: MediaStep, output: string): CompiledOperation {
+function compileSpecial(
+  plan: MediaPlan,
+  step: MediaStep,
+  source: MediaMetadata,
+  output: string,
+): CompiledOperation {
   if (step.operation === 'extract-audio') {
     return {
       executable: 'ffmpeg',
@@ -99,20 +104,19 @@ function compileSpecial(plan: MediaPlan, step: MediaStep, output: string): Compi
   if (step.operation === 'concatenate') {
     const args = ['-hide_banner', '-nostdin', '-y'];
     for (const input of step.inputs) args.push('-i', input);
-    const labels = step.inputs.map((_, index) => `[${index}:v][${index}:a]`).join('');
+    const hasVideo = source.video !== undefined;
+    const hasAudio = source.audio.present;
+    const labels = step.inputs
+      .map((_, index) => `${hasVideo ? `[${index}:v]` : ''}${hasAudio ? `[${index}:a]` : ''}`)
+      .join('');
+    const outputs = `${hasVideo ? '[v]' : ''}${hasAudio ? '[a]' : ''}`;
     args.push(
       '-filter_complex',
-      `${labels}concat=n=${step.inputs.length}:v=1:a=1[v][a]`,
-      '-map',
-      '[v]',
-      '-map',
-      '[a]',
-      '-c:v',
-      'libx264',
-      '-c:a',
-      'aac',
-      output,
+      `${labels}concat=n=${step.inputs.length}:v=${hasVideo ? 1 : 0}:a=${hasAudio ? 1 : 0}${outputs}`,
     );
+    if (hasVideo) args.push('-map', '[v]', '-c:v', 'libx264');
+    if (hasAudio) args.push('-map', '[a]', '-c:a', 'aac');
+    args.push(output);
     return { executable: 'ffmpeg', args };
   }
   throw new MediaError({

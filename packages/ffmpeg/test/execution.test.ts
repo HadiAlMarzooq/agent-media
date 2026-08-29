@@ -131,6 +131,43 @@ describe('execution', () => {
     await expect(inspectMedia(output)).resolves.toMatchObject({ kind: 'video' });
   });
 
+  it('rejects incompatible concatenation streams before execution', async () => {
+    const incompatible = join(directory, 'incompatible.mp4');
+    const generated = await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=size=640x360:rate=24',
+      '-t',
+      '1',
+      '-c:v',
+      'libx264',
+      '-an',
+      incompatible,
+    ]);
+    if (generated.exitCode !== 0) throw new Error(generated.stderr);
+
+    const output = join(directory, 'incompatible-join.mp4');
+    await expect(
+      executePlan(planMedia({ source: metadata, goals: { concatenate: [incompatible] } }), {
+        output,
+        sourceMetadata: metadata,
+      }),
+    ).rejects.toMatchObject({
+      code: 'UNSUPPORTED_INPUT',
+      context: {
+        inputIndex: 1,
+        incompatibleFields: expect.arrayContaining([
+          'video.width',
+          'video.height',
+          'video.fps',
+          'audio.present',
+        ]),
+      },
+    });
+  });
+
   it('dogfoods a serialized vertical compatibility and size plan', async () => {
     const output = join(directory, 'dogfood.mp4');
     const plan = parsePlan(
