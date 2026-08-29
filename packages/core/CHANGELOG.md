@@ -1,5 +1,11 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.0.7
+
+### Patch Changes
+
+- 6d4bd2f: Remove the stale hard-coded runtime version export.
+
 ## 0.0.6
 
 ### Patch Changes

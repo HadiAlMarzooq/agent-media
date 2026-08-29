@@ -1,5 +1,13 @@
 # @hadialmarzooq/agent-media-cli
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [6d4bd2f]
+  - @hadialmarzooq/agent-media-core@0.0.7
+  - @hadialmarzooq/agent-media-ffmpeg@0.0.8
+
 ## 0.0.8
 
 ### Patch Changes
