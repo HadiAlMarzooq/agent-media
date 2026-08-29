@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { verifyMedia } from '@agent-media/core';
 
 import { executePlan, inspectMedia } from '../src/index.js';
 import { runProcess } from '../src/process.js';
@@ -63,9 +64,18 @@ describe('execution', () => {
       },
       { output, sourceMetadata: metadata },
     );
-    await expect(inspectMedia(output)).resolves.toMatchObject({
+    const transformed = await inspectMedia(output);
+    expect(transformed).toMatchObject({
       video: { width: 180, height: 320, aspectRatio: '9:16' },
     });
+    expect(
+      verifyMedia(transformed, {
+        durationSeconds: 1,
+        aspectRatio: '9:16',
+        width: 180,
+        height: 320,
+      }),
+    ).toMatchObject({ passed: true });
   });
 
   it('extracts audio and a still frame', async () => {

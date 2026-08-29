@@ -22,3 +22,6 @@ Use `serializePlan` and `parsePlan` to move plans safely across interfaces.
 
 The FFmpeg compiler translates that stable IR to arguments only at execution time. It does not
 expose those arguments through the public planning API.
+
+Verification consumes a fresh normalized inspection of the output and returns checks plus
+actionable failures. A process exit code alone never determines success.

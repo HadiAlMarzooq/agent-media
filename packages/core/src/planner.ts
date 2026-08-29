@@ -80,7 +80,6 @@ export function planMedia(request: PlanRequest): MediaPlan {
       format: goals.extractAudio.format ?? 'm4a',
       reason: 'The caller requested an audio-only output.',
     });
-    expectations.container = goals.extractAudio.format ?? 'm4a';
     expectations.audio = 'required';
   } else if (goals.extractFrame !== undefined) {
     steps.push({

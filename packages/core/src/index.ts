@@ -19,3 +19,5 @@ export {
 export type { MediaExpectations, MediaPlan, MediaStep } from './ir.js';
 export { planMedia } from './planner.js';
 export type { MediaGoals, PlanRequest } from './planner.js';
+export { verifyMedia } from './verification.js';
+export type { VerificationCheck, VerificationReport } from './verification.js';

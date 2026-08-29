@@ -9,7 +9,7 @@ owner explicitly approves publication.
 | 1     | Inspection and capabilities                        | 0            | Normalized metadata, typed errors, real ffprobe integration tests           | Complete |
 | 2     | Versioned Media IR and semantic planner            | 1            | Serializable schema, validation, reasons, conflict tests                    | Complete |
 | 3     | FFmpeg execution                                   | 2            | Focused operations compile and execute with integration tests               | Complete |
-| 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Pending  |
+| 4     | Verification                                       | 3            | Structured checks inspect outputs, including failed constraints             | Complete |
 | 5     | Agent interfaces                                   | 4            | CLI and MCP reuse core; examples, JSON output and schemas                   | Pending  |
 | 6     | Hardening                                          | 5            | Timeouts, cleanup, collision and path safety; security review               | Pending  |
 | 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Pending  |
@@ -44,6 +44,13 @@ owner explicitly approves publication.
 - [x] Return structured execution failures instead of backend-only output.
 - [x] Test representative operations against generated media with real FFmpeg.
 
-### Phase 4–7
+### Phase 4
+
+- [x] Verify output metadata against plan expectations.
+- [x] Report dimensions, aspect ratio, duration, size, container and audio checks structurally.
+- [x] Document and apply a 2% maximum-size verification tolerance.
+- [x] Cover passing and failing verification, including real transformed output.
+
+### Phase 5–7
 
 Detailed checklists are kept adjacent to each implementation and completed with their phase.
