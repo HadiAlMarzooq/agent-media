@@ -7,11 +7,18 @@ Agent Media is a deterministic media transformation runtime for software agents.
 - `@hadialmarzooq/agent-media-core` is protocol-independent and does not depend on MCP.
 - `@hadialmarzooq/agent-media-ffmpeg` is the initial execution backend.
 - `agent-media` emits JSON for inspect, plan, execute, verify and capabilities.
-- `agent-media-mcp` exposes the same semantic pipeline via five MCP tools over stdio.
+- `agent-media vertical` runs a verified 9:16 workflow; `--progress` writes NDJSON to stderr.
+- `agent-media-mcp` exposes six tools, including `make_vertical`, over stdio.
+- `makeVertical` returns source metadata, portable plan, serialized plan, output metadata, and verification.
+- SDK progress callbacks are monotonic; MCP uses protocol-native progress notifications.
 - Inspect plans before execution and verify outputs afterward.
 - Validate unknown plan values with `validatePlan`; JSON parsing and schema failures use `INVALID_PLAN`.
 - MCP execution and verification accept either a plan object or serialized plan JSON.
 - Extraction and concatenation are terminal Media IR v1 operations and cannot be mixed with transforms.
-- The repository and all packages are private pre-public work; do not publish them.
+- Concatenation preflights stream topology and reports incompatible fields as `UNSUPPORTED_INPUT`.
+- `pnpm demo` proves failed verification and structured plan recovery.
+- `pnpm benchmark:reliability` emits a cross-platform semantic evidence report.
+- The repository is a private release candidate; packages are not published to npm.
 
-Read `README.md`, `docs/api.md`, `ARCHITECTURE.md`, and `ROADMAP.md` first.
+Read `README.md`, `docs/README.md`, `docs/api.md`, `docs/errors.md`, `ARCHITECTURE.md`, and
+`ROADMAP.md` first.
