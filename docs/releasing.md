@@ -27,8 +27,9 @@ Pushing a SemVer-like `v*` tag runs `.github/workflows/release.yml`. The job:
 4. packs all four workspace packages;
 5. verifies each archive contains its manifest and built JavaScript/types but no source/test tree;
 6. rejects packed manifests that still contain a `workspace:` dependency;
-7. creates `release-manifest.json` and `SHA256SUMS.txt`; and
-8. creates or updates a GitHub prerelease and attaches packages plus corpus/demo evidence.
+7. installs the tarballs into an empty project and imports SDK/MCP exports plus the CLI binary;
+8. creates `release-manifest.json` and `SHA256SUMS.txt`; and
+9. creates or updates a GitHub prerelease and attaches packages plus corpus/demo evidence.
 
 The release train tag and individual package versions are separate. The manifest is authoritative for
 the versions inside a bundle.
@@ -46,6 +47,7 @@ pnpm benchmark:reliability
 pnpm demo
 pnpm audit:prod
 pnpm release:pack
+pnpm release:smoke
 ```
 
 Inspect `artifacts/release/release-manifest.json` and verify checksums locally:

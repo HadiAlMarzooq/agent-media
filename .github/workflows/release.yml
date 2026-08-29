@@ -54,6 +54,7 @@ jobs:
       - run: node examples/agent-recovery.mjs
       - run: pnpm audit:prod
       - run: node scripts/package-release.mjs
+      - run: node scripts/smoke-release.mjs
       - name: Create or update GitHub prerelease
         shell: bash
         run: |

@@ -19,6 +19,7 @@
     "benchmark:reliability": "pnpm build && node benchmarks/reliability.mjs",
     "benchmark:compare": "node benchmarks/compare-reliability.mjs",
     "release:pack": "pnpm build && node scripts/package-release.mjs",
+    "release:smoke": "node scripts/smoke-release.mjs",
     "audit:prod": "pnpm audit --prod",
     "test:watch": "vitest",
     "changeset": "changeset",
