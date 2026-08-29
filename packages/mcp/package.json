@@ -1,6 +1,6 @@
 {
   "name": "@agent-media/mcp",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "MCP adapter for Agent Media.",
   "license": "MIT",
   "type": "module",

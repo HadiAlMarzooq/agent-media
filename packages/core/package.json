@@ -1,6 +1,6 @@
 {
   "name": "@agent-media/core",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Semantic media planning and verification primitives.",
   "license": "MIT",
   "type": "module",

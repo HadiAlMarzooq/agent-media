@@ -1,5 +1,11 @@
 # @agent-media/core
 
+## 0.0.3
+
+### Patch Changes
+
+- 160f253: Add versioned semantic Media IR, serialization, planning, explanations, and constraint validation.
+
 ## 0.0.2
 
 ### Patch Changes
