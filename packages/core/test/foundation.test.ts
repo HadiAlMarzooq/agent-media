@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { CORE_VERSION } from '../src/index.js';
+import { planMedia } from '../src/index.js';
 
 describe('workspace foundation', () => {
-  it('exports a core package version', () => {
-    expect(CORE_VERSION).toMatch(/^0\.0\.\d+$/);
+  it('exports the semantic planning API', () => {
+    expect(planMedia).toBeTypeOf('function');
   });
 });
