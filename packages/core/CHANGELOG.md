@@ -1,5 +1,12 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.0.8
+
+### Patch Changes
+
+- 5d7efd3: Validate Media IR at every runtime boundary, verify compatibility metadata, prevent silent step
+  loss, and dogfood real transformations through the SDK, CLI, and MCP protocol.
+
 ## 0.0.7
 
 ### Patch Changes
