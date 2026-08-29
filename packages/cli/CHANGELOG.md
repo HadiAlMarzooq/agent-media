@@ -1,5 +1,12 @@
 # @agent-media/cli
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [2a023a3]
+  - @agent-media/ffmpeg@0.0.4
+
 ## 0.0.3
 
 ### Patch Changes

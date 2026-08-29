@@ -1,5 +1,11 @@
 # @agent-media/ffmpeg
 
+## 0.0.4
+
+### Patch Changes
+
+- 2a023a3: Add deterministic FFmpeg compilation and execution for core transformation operations.
+
 ## 0.0.3
 
 ### Patch Changes
