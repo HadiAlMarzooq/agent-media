@@ -1,5 +1,11 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.2.0
+
+### Minor Changes
+
+- 9efdea9: Fix vacuous verification, add concatenate workflow, strict goal schema, MCP tool annotations, extract-frame expectations, output directory and extension validation, per-path execution locking, full path in error messages, still-image rejection.
+
 ## 0.1.1
 
 ### Patch Changes
