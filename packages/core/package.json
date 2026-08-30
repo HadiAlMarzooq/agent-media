@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Versioned media planning and structured verification primitives for software agents.",
   "keywords": [
     "media",
