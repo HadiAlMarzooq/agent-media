@@ -21,6 +21,7 @@
     "release:pack": "pnpm build && node scripts/package-release.mjs",
     "release:smoke": "node scripts/smoke-release.mjs",
     "audit:prod": "pnpm audit --prod",
+    "check:sizes": "pnpm build && node scripts/check-package-sizes.mjs",
     "test:watch": "vitest",
     "changeset": "changeset",
     "version-packages": "changeset version"
