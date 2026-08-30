@@ -3,9 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
+import {
+  parsePlan,
+  parseReceipt,
+  planMedia,
+  serializePlan,
+  verifyMedia,
+} from '@hadialmarzooq/agent-media-core';
 
 import {
+  analyzeContent,
+  resumeFromReceipt,
   concatenate,
   executePlan,
   inspectMedia,
@@ -369,8 +377,7 @@ describe('execution', () => {
   it('runs the concatenate workflow and produces a longer output', async () => {
     const output = join(directory, 'concat-workflow.mp4');
     const result = await concatenate({
-      input: fixture,
-      inputs: [fixture],
+      inputs: [fixture, fixture],
       output,
       overwrite: true,
     });
@@ -410,4 +417,233 @@ describe('execution', () => {
       });
     }
   });
+
+  it('writes a durable receipt and resumes idempotently from it', async () => {
+    const output = join(directory, 'receipt.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    const first = await executePlan(plan, {
+      output,
+      sourceMetadata: metadata,
+      writeReceipt: true,
+    });
+
+    expect(first.receipt).toMatchObject({
+      receiptVersion: '1',
+      verification: { passed: true },
+    });
+    await expect(accessFile(`${output}.receipt.json`)).resolves.toBeDefined();
+
+    const second = await executePlan(plan, {
+      output,
+      sourceMetadata: metadata,
+      resume: true,
+    });
+    expect(second.resumed).toBe(true);
+    expect(second.receipt?.planFingerprint).toBe(first.receipt?.planFingerprint);
+  });
+
+  it('does not resume when the source changed', async () => {
+    const output = join(directory, 'resume-drift.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    await executePlan(plan, { output, sourceMetadata: metadata, writeReceipt: true });
+
+    const drifted: typeof metadata = { ...metadata, sizeBytes: metadata.sizeBytes + 1 };
+    const rerun = await executePlan(plan, {
+      output,
+      sourceMetadata: drifted,
+      overwrite: true,
+      resume: true,
+    });
+    expect(rerun.resumed).toBeUndefined();
+  });
+
+  it('runs a workflow with writeReceipt and returns the receipt', async () => {
+    const output = join(directory, 'workflow-receipt.mp4');
+    const result = await makeVertical({
+      input: fixture,
+      output,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+      writeReceipt: true,
+    });
+    expect(result.receipt).toMatchObject({ receiptVersion: '1', verification: { passed: true } });
+    await expect(accessFile(`${output}.receipt.json`)).resolves.toBeDefined();
+  });
+
+  it('detects black frames and silence in the output content', async () => {
+    const blackFixture = join(directory, 'black-silent.mp4');
+    await runProcess('ffmpeg', [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=c=black:size=320x180:rate=30',
+      '-f',
+      'lavfi',
+      '-i',
+      'anullsrc=channel_layout=mono:sample_rate=44100',
+      '-t',
+      '2',
+      '-c:v',
+      'libx264',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:a',
+      'aac',
+      blackFixture,
+    ]);
+    const checks = await analyzeContent(await inspectMedia(blackFixture), {
+      blackFrames: true,
+      silence: true,
+      // The clip is only 2s, so the 2s default freeze window would never close on it.
+      freeze: { minDurationSeconds: 0.5 },
+      completeness: true,
+    });
+    expect(checks.blackFrames?.passed).toBe(false);
+    expect(checks.silence?.passed).toBe(false);
+    expect(checks.freeze?.passed).toBe(false);
+    expect(checks.completeness?.passed).toBe(true);
+  });
+
+  it('passes content checks on real picture and sound', async () => {
+    const checks = await analyzeContent(metadata, {
+      blackFrames: true,
+      silence: true,
+      freeze: true,
+      completeness: true,
+    });
+    for (const [name, check] of Object.entries(checks)) {
+      expect(check.passed, `${name}: ${check.message} (${String(check.actual)})`).toBe(true);
+    }
+  });
+
+  it('carries content checks into the workflow verification and receipt', async () => {
+    const output = join(directory, 'content-checked.mp4');
+    const result = await makeVertical({
+      input: fixture,
+      output,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+      contentChecks: { blackFrames: true, completeness: true },
+      writeReceipt: true,
+    });
+    expect(result.verification.checks.blackFrames).toBeDefined();
+    expect(result.verification.checks.completeness).toBeDefined();
+    expect(result.receipt?.verification.checks.blackFrames).toBeDefined();
+  });
+
+  it('reports a failing content check as a warning when it is warn-only', async () => {
+    const output = join(directory, 'warn-only.mp4');
+    const result = await makeVertical({
+      input: fixture,
+      output,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+      contentChecks: { freeze: { minDurationSeconds: 0.1 } },
+      warnOnly: ['freeze'],
+      overwrite: true,
+    });
+    // testsrc2 does not freeze, so this asserts the wiring, not the detector.
+    expect(result.verification.passed).toBe(true);
+    expect(result.verification.warnings).toBeDefined();
+  });
+
+  it('records a failure receipt when execution fails', async () => {
+    const output = join(directory, 'failed.mp4');
+    const plan = planMedia({ source: metadata, goals: { compatibility: 'high' } });
+    await expect(
+      executePlan(plan, {
+        output,
+        sourceMetadata: metadata,
+        writeReceipt: true,
+        ffmpegPath: '/nonexistent/ffmpeg',
+      }),
+    ).rejects.toThrowError(expect.objectContaining({ code: 'FFMPEG_NOT_FOUND' }));
+
+    const { readFile } = await import('node:fs/promises');
+    const receipt = parseReceipt(await readFile(`${output}.receipt.json`, 'utf8'));
+    expect(receipt.failure?.code).toBe('FFMPEG_NOT_FOUND');
+    expect(receipt.verification.passed).toBe(false);
+    expect(receipt.executedSteps).toEqual([]);
+  });
+
+  it('does not resume from a failure receipt', async () => {
+    const output = join(directory, 'failed-resume.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    await expect(
+      executePlan(plan, {
+        output,
+        sourceMetadata: metadata,
+        writeReceipt: true,
+        ffmpegPath: '/nonexistent/ffmpeg',
+      }),
+    ).rejects.toThrow();
+
+    const rerun = await executePlan(plan, { output, sourceMetadata: metadata, resume: true });
+    expect(rerun.resumed).toBeUndefined();
+    expect(rerun.verification?.passed).toBe(true);
+  });
+
+  it('resumes from a saved receipt without re-encoding', async () => {
+    const output = join(directory, 'resume-from-receipt.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    const first = await executePlan(plan, { output, sourceMetadata: metadata, writeReceipt: true });
+    expect(first.resumed).toBeUndefined();
+
+    const { readFile, stat } = await import('node:fs/promises');
+    const before = await stat(output);
+    const receipt = parseReceipt(await readFile(`${output}.receipt.json`, 'utf8'));
+    const resumed = await resumeFromReceipt(receipt);
+    const after = await stat(output);
+
+    expect(resumed.resumed).toBe(true);
+    expect(resumed.output).toBe(output);
+    expect(after.mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it('re-executes through resumeFromReceipt when the output no longer exists', async () => {
+    const output = join(directory, 'resume-missing-output.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    await executePlan(plan, { output, sourceMetadata: metadata, writeReceipt: true });
+
+    const { readFile, rm: remove } = await import('node:fs/promises');
+    const receipt = parseReceipt(await readFile(`${output}.receipt.json`, 'utf8'));
+    await remove(output);
+
+    const rerun = await resumeFromReceipt(receipt);
+    expect(rerun.resumed).toBeUndefined();
+    await expect(accessFile(output)).resolves.toBe(output);
+  });
+
+  it('rejects a concatenation of fewer than two clips', async () => {
+    await expect(
+      concatenate({ inputs: [fixture], output: join(directory, 'one-clip.mp4') }),
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: 'INVALID_PLAN', message: expect.stringContaining('two') }),
+    );
+  });
 });
+
+async function accessFile(path: string): Promise<string> {
+  const { access } = await import('node:fs/promises');
+  await access(path);
+  return path;
+}

@@ -11,12 +11,18 @@ import {
   planMedia,
   validatePlan,
   verifyMedia,
+  inspectPlanIssues,
+  repairPlan,
+  parseReceipt,
+  mediaPlanSchemaId,
+  mediaPlanSchemaVersion,
 } from '@hadialmarzooq/agent-media-core';
-import type { MediaGoals, MediaPlan } from '@hadialmarzooq/agent-media-core';
+import type { MediaGoals, MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 import {
   concatenate,
   executePlan,
   extractAudio,
+  resumeFromReceipt,
   extractFrame,
   getCapabilities,
   inspectMedia,
@@ -24,7 +30,7 @@ import {
   normalize,
   optimizeForWeb,
 } from '@hadialmarzooq/agent-media-ffmpeg';
-import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
+import type { ContentCheckOptions, MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
 
 const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
@@ -64,9 +70,121 @@ function validateGoalSchema(goals: z.infer<typeof goalSchema>): z.infer<typeof g
   return goals;
 }
 
+// `irVersion` is accepted as any string here on purpose: the runtime's own boundary check reports
+// an unsupported version by name, which is more useful than a schema mismatch on a literal.
 const planRefSchema = z
-  .object({ irVersion: z.literal('1'), source: z.object({ path: z.string() }) })
+  .object({ irVersion: z.string().min(1), source: z.object({ path: z.string() }) })
   .passthrough();
+
+const videoStreamSchema = z.object({
+  width: z.number(),
+  height: z.number(),
+  aspectRatio: z.string(),
+  fps: z.number().optional(),
+  codec: z.string().optional(),
+  pixelFormat: z.string().optional(),
+  rotationDegrees: z.number().optional(),
+});
+
+const mediaMetadataShape = {
+  path: z.string(),
+  kind: z.enum(['video', 'audio', 'image', 'unknown']),
+  durationSeconds: z.number().optional(),
+  container: z.string().optional(),
+  sizeBytes: z.number(),
+  video: videoStreamSchema.optional(),
+  audio: z.object({
+    present: z.boolean(),
+    codec: z.string().optional(),
+    sampleRate: z.number().optional(),
+    channels: z.number().optional(),
+  }),
+};
+const mediaMetadataSchema = z.object(mediaMetadataShape);
+
+const verificationShape = {
+  passed: z.boolean(),
+  checks: z.record(
+    z.string(),
+    z.object({
+      passed: z.boolean(),
+      expected: z.unknown(),
+      actual: z.unknown(),
+      message: z.string(),
+    }),
+  ),
+  failures: z.array(z.string()),
+  warnings: z.array(z.string()),
+};
+const verificationSchema = z.object(verificationShape);
+
+const planSchema = z.object({
+  irVersion: z.literal('1'),
+  source: z.object({ path: z.string() }),
+  constraints: z.record(z.string(), z.unknown()),
+  steps: z.array(z.record(z.string(), z.unknown())),
+  expectations: z.record(z.string(), z.unknown()),
+});
+
+// `source` and `plan` are echoed for convenience and already carry a full schema on
+// inspect_media and plan_media; repeating them on all six workflow tools tripled the cost of
+// tools/list for no added type information.
+const echoedObject = z.looseObject({});
+
+// Receipts are fully specified by the core receipt schema. Restating them per tool would triple
+// the cost of tools/list for type information a caller can get from inspect_receipt.
+const receiptSchema = z.looseObject({ receiptVersion: z.string(), planFingerprint: z.string() });
+
+const workflowResultShape = {
+  source: echoedObject,
+  plan: echoedObject,
+  output: mediaMetadataSchema,
+  verification: verificationSchema,
+  resumed: z.boolean().optional(),
+  receipt: receiptSchema.optional(),
+};
+
+// Content checks are opt-in per call: they cost a full decode of the output.
+const contentChecksSchema = z
+  .object({
+    blackFrames: z
+      .union([z.boolean(), z.object({ minDurationSeconds: z.number().positive() })])
+      .optional(),
+    silence: z
+      .union([
+        z.boolean(),
+        z.object({
+          thresholdDb: z.number().optional(),
+          minDurationSeconds: z.number().positive().optional(),
+        }),
+      ])
+      .optional(),
+    freeze: z
+      .union([z.boolean(), z.object({ minDurationSeconds: z.number().positive() })])
+      .optional(),
+    completeness: z.boolean().optional(),
+  })
+  .strict();
+
+const contentCheckInputs = {
+  contentChecks: contentChecksSchema
+    .optional()
+    .describe('Decode the output once and check what it contains, not just its shape.'),
+  warnOnly: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('Check names that warn instead of failing the call.'),
+};
+
+/**
+ * The zod-inferred shape and `ContentCheckOptions` describe the same values; they differ only in
+ * how each spells "this sub-field may be absent" under exactOptionalPropertyTypes.
+ */
+function contentCheckOptions(value: z.infer<typeof contentChecksSchema> | undefined): {
+  contentChecks?: ContentCheckOptions;
+} {
+  return value === undefined ? {} : { contentChecks: value as ContentCheckOptions };
+}
 
 const readOnlyHint = { readOnlyHint: true } as const;
 const destructiveHint = { destructiveHint: true } as const;
@@ -79,6 +197,7 @@ export function createMcpServer(): McpServer {
       description:
         'Inspect normalized media metadata. Paths resolve against the server working directory; absolute paths are recommended.',
       inputSchema: { input: z.string().min(1) },
+      outputSchema: mediaMetadataShape,
       annotations: readOnlyHint,
     },
     async ({ input }) => safely(async () => inspectMedia(input)),
@@ -87,6 +206,22 @@ export function createMcpServer(): McpServer {
     'get_media_capabilities',
     {
       description: 'Detect local FFmpeg capabilities.',
+      outputSchema: {
+        ffmpegVersion: z.string(),
+        encoders: z.object({
+          h264: z.boolean(),
+          hevc: z.boolean(),
+          av1: z.boolean(),
+          aac: z.boolean(),
+        }),
+        hardwareAcceleration: z.array(z.string()),
+        filters: z.object({
+          scale: z.boolean(),
+          crop: z.boolean(),
+          concat: z.boolean(),
+          subtitles: z.boolean(),
+        }),
+      },
       annotations: readOnlyHint,
     },
     async () => safely(getCapabilities),
@@ -94,9 +229,9 @@ export function createMcpServer(): McpServer {
   server.registerTool(
     'plan_media',
     {
-      description:
-        'Create an inspectable versioned semantic Media IR plan from semantic goals. All goals in the MediaGoals type are accepted.',
+      description: `Create an inspectable versioned semantic Media IR plan from semantic goals. All goals in the MediaGoals type are accepted. Plans conform to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}, also returned by get_media_plan_schema.`,
       inputSchema: { input: z.string().min(1), goals: goalSchema },
+      outputSchema: { plan: planSchema },
       annotations: readOnlyHint,
     },
     async ({ input, goals }) =>
@@ -107,6 +242,87 @@ export function createMcpServer(): McpServer {
           capabilities: await getCapabilities(),
         }),
       })),
+  );
+  server.registerTool(
+    'validate_plan',
+    {
+      description: `Detect mechanical plan issues (impossible trims, dimension conflicts, out-of-range timestamps, concatenation stream conflicts) against a real source without executing. Plans conform to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}. Read-only.`,
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+      },
+      outputSchema: {
+        issues: z.array(
+          z.object({
+            field: z.string(),
+            message: z.string(),
+            repairable: z.boolean(),
+            normalization: z
+              .array(
+                z.object({
+                  input: z.string(),
+                  differences: z.array(z.string()),
+                  plan: planSchema,
+                }),
+              )
+              .optional(),
+          }),
+        ),
+      },
+      annotations: readOnlyHint,
+    },
+    async ({ plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        const source = await inspectMedia(plan.source.path);
+        // A concatenation's conflicts live in the other clips, so they have to be inspected too;
+        // otherwise a stream-layout mismatch stays invisible until FFmpeg refuses the join.
+        const concatenationSources = await inspectConcatenationSources(plan, source);
+        return {
+          issues: inspectPlanIssues(plan, source, {
+            ...(concatenationSources === undefined ? {} : { concatenationSources }),
+          }),
+        };
+      }),
+  );
+  server.registerTool(
+    'repair_plan',
+    {
+      description: `Repair mechanical plan issues (clamp trims and timestamps into source duration, reconcile resize with aspect ratio) and return the repaired plan with a structured repair report. Plans conform to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}.`,
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+      },
+      outputSchema: {
+        repairs: z.array(
+          z.object({
+            field: z.string(),
+            action: z.string(),
+            from: z.unknown(),
+            to: z.unknown(),
+          }),
+        ),
+        repairedPlan: planSchema,
+      },
+      annotations: readOnlyHint,
+    },
+    async ({ plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        const { plan: repaired, repairs } = repairPlan(plan, await inspectMedia(plan.source.path));
+        return { repairs, repairedPlan: repaired };
+      }),
+  );
+  server.registerTool(
+    'get_media_plan_schema',
+    {
+      description: `Return the canonical Media Plan JSON Schema (Media IR v${mediaPlanSchemaVersion}, ${mediaPlanSchemaId}) generated from the runtime models, so agent tooling cannot drift.`,
+      outputSchema: { $id: z.string(), schema: z.record(z.string(), z.unknown()) },
+      annotations: readOnlyHint,
+    },
+    async () =>
+      safely(async () => {
+        const { mediaPlanJsonSchema } = await import('@hadialmarzooq/agent-media-core');
+        return { $id: mediaPlanSchemaId, schema: mediaPlanJsonSchema };
+      }),
   );
   server.registerTool(
     'make_vertical',
@@ -123,29 +339,35 @@ export function createMcpServer(): McpServer {
         maxSizeMB: z.number().positive().optional(),
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
-        makeVertical({
-          input: options.input,
-          output: options.output,
-          ...(options.width === undefined ? {} : { width: options.width }),
-          ...(options.height === undefined ? {} : { height: options.height }),
-          ...(options.trimStartSeconds === undefined
-            ? {}
-            : { trimStartSeconds: options.trimStartSeconds }),
-          ...(options.durationSeconds === undefined
-            ? {}
-            : { durationSeconds: options.durationSeconds }),
-          ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
-          ...(options.audio === undefined ? {} : { audio: options.audio }),
-          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
-          signal: extra.signal,
-          onProgress: notifications.notify,
-        }),
+        workflowResponse(
+          await makeVertical({
+            input: options.input,
+            output: options.output,
+            ...(options.width === undefined ? {} : { width: options.width }),
+            ...(options.height === undefined ? {} : { height: options.height }),
+            ...(options.trimStartSeconds === undefined
+              ? {}
+              : { trimStartSeconds: options.trimStartSeconds }),
+            ...(options.durationSeconds === undefined
+              ? {}
+              : { durationSeconds: options.durationSeconds }),
+            ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
+            ...(options.audio === undefined ? {} : { audio: options.audio }),
+            ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            signal: extra.signal,
+            onProgress: notifications.notify,
+          }),
+        ),
       );
       await notifications.drain();
       return response;
@@ -165,28 +387,34 @@ export function createMcpServer(): McpServer {
         quality: z.enum(['high', 'balanced', 'small']).optional(),
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
-        optimizeForWeb({
-          input: options.input,
-          output: options.output,
-          ...(options.trimStartSeconds === undefined
-            ? {}
-            : { trimStartSeconds: options.trimStartSeconds }),
-          ...(options.durationSeconds === undefined
-            ? {}
-            : { durationSeconds: options.durationSeconds }),
-          ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
-          ...(options.quality === undefined ? {} : { quality: options.quality }),
-          ...(options.audio === undefined ? {} : { audio: options.audio }),
-          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
-          signal: extra.signal,
-          onProgress: notifications.notify,
-        }),
+        workflowResponse(
+          await optimizeForWeb({
+            input: options.input,
+            output: options.output,
+            ...(options.trimStartSeconds === undefined
+              ? {}
+              : { trimStartSeconds: options.trimStartSeconds }),
+            ...(options.durationSeconds === undefined
+              ? {}
+              : { durationSeconds: options.durationSeconds }),
+            ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
+            ...(options.quality === undefined ? {} : { quality: options.quality }),
+            ...(options.audio === undefined ? {} : { audio: options.audio }),
+            ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            signal: extra.signal,
+            onProgress: notifications.notify,
+          }),
+        ),
       );
       await notifications.drain();
       return response;
@@ -204,26 +432,32 @@ export function createMcpServer(): McpServer {
         durationSeconds: z.number().positive().optional(),
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
-        normalize({
-          input: options.input,
-          output: options.output,
-          ...(options.trimStartSeconds === undefined
-            ? {}
-            : { trimStartSeconds: options.trimStartSeconds }),
-          ...(options.durationSeconds === undefined
-            ? {}
-            : { durationSeconds: options.durationSeconds }),
-          ...(options.audio === undefined ? {} : { audio: options.audio }),
-          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
-          signal: extra.signal,
-          onProgress: notifications.notify,
-        }),
+        workflowResponse(
+          await normalize({
+            input: options.input,
+            output: options.output,
+            ...(options.trimStartSeconds === undefined
+              ? {}
+              : { trimStartSeconds: options.trimStartSeconds }),
+            ...(options.durationSeconds === undefined
+              ? {}
+              : { durationSeconds: options.durationSeconds }),
+            ...(options.audio === undefined ? {} : { audio: options.audio }),
+            ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            signal: extra.signal,
+            onProgress: notifications.notify,
+          }),
+        ),
       );
       await notifications.drain();
       return response;
@@ -241,26 +475,32 @@ export function createMcpServer(): McpServer {
         trimStartSeconds: z.number().nonnegative().optional(),
         durationSeconds: z.number().positive().optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
-        extractAudio({
-          input: options.input,
-          output: options.output,
-          ...(options.format === undefined ? {} : { format: options.format }),
-          ...(options.trimStartSeconds === undefined
-            ? {}
-            : { trimStartSeconds: options.trimStartSeconds }),
-          ...(options.durationSeconds === undefined
-            ? {}
-            : { durationSeconds: options.durationSeconds }),
-          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
-          signal: extra.signal,
-          onProgress: notifications.notify,
-        }),
+        workflowResponse(
+          await extractAudio({
+            input: options.input,
+            output: options.output,
+            ...(options.format === undefined ? {} : { format: options.format }),
+            ...(options.trimStartSeconds === undefined
+              ? {}
+              : { trimStartSeconds: options.trimStartSeconds }),
+            ...(options.durationSeconds === undefined
+              ? {}
+              : { durationSeconds: options.durationSeconds }),
+            ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            signal: extra.signal,
+            onProgress: notifications.notify,
+          }),
+        ),
       );
       await notifications.drain();
       return response;
@@ -277,21 +517,27 @@ export function createMcpServer(): McpServer {
         atSeconds: z.number().nonnegative().optional(),
         format: z.enum(['jpg', 'png']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
-        extractFrame({
-          input: options.input,
-          output: options.output,
-          ...(options.atSeconds === undefined ? {} : { atSeconds: options.atSeconds }),
-          ...(options.format === undefined ? {} : { format: options.format }),
-          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
-          signal: extra.signal,
-          onProgress: notifications.notify,
-        }),
+        workflowResponse(
+          await extractFrame({
+            input: options.input,
+            output: options.output,
+            ...(options.atSeconds === undefined ? {} : { atSeconds: options.atSeconds }),
+            ...(options.format === undefined ? {} : { format: options.format }),
+            ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            signal: extra.signal,
+            onProgress: notifications.notify,
+          }),
+        ),
       );
       await notifications.drain();
       return response;
@@ -301,26 +547,33 @@ export function createMcpServer(): McpServer {
     'concatenate_media',
     {
       description:
-        'Concatenate multiple media sources into a single verified output. All inputs must have compatible stream layouts. Reports MCP progress when requested. Overwrite is destructive.',
+        'Concatenate two or more media sources into a single verified output. Pass every clip in `inputs`, in playback order. All inputs must have compatible stream layouts. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
-        input: z.string().min(1),
-        inputs: z.array(z.string().min(1)).min(1),
+        inputs: z
+          .array(z.string().min(1))
+          .min(2)
+          .describe('Every clip to join, in playback order. The first entry leads the output.'),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
-        concatenate({
-          input: options.input,
-          inputs: options.inputs,
-          output: options.output,
-          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
-          signal: extra.signal,
-          onProgress: notifications.notify,
-        }),
+        workflowResponse(
+          await concatenate({
+            inputs: options.inputs,
+            output: options.output,
+            ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            signal: extra.signal,
+            onProgress: notifications.notify,
+          }),
+        ),
       );
       await notifications.drain();
       return response;
@@ -329,33 +582,113 @@ export function createMcpServer(): McpServer {
   server.registerTool(
     'execute_media_plan',
     {
-      description:
-        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Overwrite is destructive.',
+      description: `Execute a serialized semantic Media IR plan conforming to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}. Accepts a plan object or JSON string. Fails with VERIFICATION_FAILED when the output does not satisfy the plan. Overwrite is destructive. Set writeReceipt to emit a durable receipt, or resume to skip execution when a passing receipt already matches the plan and source.`,
       inputSchema: {
         plan: z.union([z.string().min(1), planRefSchema]),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
+        writeReceipt: z.boolean().optional(),
+        resume: z.boolean().optional(),
+        ...contentCheckInputs,
+      },
+      outputSchema: {
+        output: z.string(),
+        resumed: z.boolean().optional(),
+        receipt: receiptSchema.optional(),
+        verification: verificationSchema,
       },
       annotations: destructiveHint,
     },
-    async ({ plan: input, output, overwrite }, extra) => {
+    async (
+      { plan: input, output, overwrite, writeReceipt, resume, contentChecks, warnOnly },
+      extra,
+    ) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () => {
         const plan = normalizePlan(input);
         const execution = await executePlan(plan, {
           output,
           ...(overwrite === undefined ? {} : { overwrite }),
+          ...(writeReceipt === undefined ? {} : { writeReceipt }),
+          ...(resume === undefined ? {} : { resume }),
+          ...contentCheckOptions(contentChecks),
+          ...(warnOnly === undefined ? {} : { warnOnly }),
           signal: extra.signal,
           onProgress: notifications.notify,
         });
+        // Execution already verified the output to build its receipt; a resumed run carries the
+        // verification the receipt recorded. Only probe again if neither is present.
+        const verification =
+          execution.verification ??
+          execution.receipt?.verification ??
+          verifyMedia(await inspectMedia(execution.output), plan.expectations);
+        // Match the workflow tools: an unverified artifact is a failed call, not a success
+        // envelope carrying passed:false that a caller branching on isError would sail past.
+        if (!verification.passed) {
+          throw new MediaError({
+            code: 'VERIFICATION_FAILED',
+            message: 'The plan executed, but the output did not satisfy its expectations.',
+            context: { output: execution.output, verification },
+            suggestedActions: ['Inspect the failed checks, adjust the plan, and retry.'],
+          });
+        }
         return {
           output: execution.output,
-          verification: verifyMedia(await inspectMedia(execution.output), plan.expectations),
+          ...(execution.resumed === undefined ? {} : { resumed: execution.resumed }),
+          ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
+          verification,
         };
       });
       await notifications.drain();
       return response;
     },
+  );
+  server.registerTool(
+    'resume_execution',
+    {
+      description:
+        'Continue from a saved execution receipt: skip the work when the recorded output still satisfies the same plan against an unchanged source, and re-execute the plan when it does not. Overwrite is destructive.',
+      inputSchema: {
+        receipt: z.string().min(1),
+        output: z.string().min(1).optional(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        output: z.string(),
+        resumed: z.boolean(),
+        receipt: receiptSchema.optional(),
+      },
+      annotations: destructiveHint,
+    },
+    async ({ receipt, output, overwrite }, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () => {
+        const execution = await resumeFromReceipt(parseReceipt(receipt), {
+          ...(output === undefined ? {} : { output }),
+          ...(overwrite === undefined ? {} : { overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        });
+        return {
+          output: execution.output,
+          resumed: execution.resumed === true,
+          ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
+        };
+      });
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'inspect_receipt',
+    {
+      description:
+        'Validate and inspect a saved execution receipt (durable record of plan, source fingerprint, output, and verification).',
+      inputSchema: { receipt: z.string().min(1) },
+      outputSchema: { receipt: receiptSchema },
+      annotations: readOnlyHint,
+    },
+    async ({ receipt }) => safely(async () => ({ receipt: parseReceipt(receipt) })),
   );
   server.registerTool(
     'verify_media',
@@ -366,6 +699,7 @@ export function createMcpServer(): McpServer {
         output: z.string().min(1),
         plan: z.union([z.string().min(1), planRefSchema]),
       },
+      outputSchema: verificationShape,
       annotations: readOnlyHint,
     },
     async ({ output, plan: input }) =>
@@ -377,8 +711,27 @@ export function createMcpServer(): McpServer {
   return server;
 }
 
+/**
+ * Workflow results reach MCP without `serializedPlan`: it is a verbatim escaped copy of `plan`,
+ * a third of the payload, and every tool that takes a plan accepts the object directly. SDK and
+ * CLI callers still get it.
+ */
+function workflowResponse<T extends { serializedPlan?: string }>(
+  result: T,
+): Omit<T, 'serializedPlan'> {
+  const rest = { ...result };
+  delete rest.serializedPlan;
+  return rest;
+}
+
 function result(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
+  const content = [{ type: 'text' as const, text: JSON.stringify(value) }];
+  // Tools declare an outputSchema, so every success also carries the typed object.
+  return isPlainObject(value) ? { content, structuredContent: value } : { content };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function safely(operation: () => Promise<unknown>) {
@@ -392,8 +745,24 @@ async function safely(operation: () => Promise<unknown>) {
             code: 'UNEXPECTED_ERROR',
             message: error instanceof Error ? error.message : String(error),
           };
-    return { ...result(structured), isError: true };
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(structured) }],
+      isError: true,
+    };
   }
+}
+
+async function inspectConcatenationSources(
+  plan: MediaPlan,
+  source: MediaMetadata,
+): Promise<MediaMetadata[] | undefined> {
+  const concatenate = plan.steps.find((step) => step.operation === 'concatenate');
+  if (concatenate?.operation !== 'concatenate') return undefined;
+  const sources: MediaMetadata[] = [];
+  for (const [index, input] of concatenate.inputs.entries()) {
+    sources.push(index === 0 ? source : await inspectMedia(input));
+  }
+  return sources;
 }
 
 function normalizePlan(input: string | Record<string, unknown>): MediaPlan {

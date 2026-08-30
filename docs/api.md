@@ -182,7 +182,10 @@ are monotonic, and completion is exactly 100. Intermediate timing fields are opt
 ### High-level workflows
 
 All five workflows share `WorkflowOptions` (input, output, overwrite, allowedOutputDirectory,
-signal, onProgress) and return `{ source, plan, serializedPlan, output, verification }`.
+signal, onProgress) and return `{ source, plan, serializedPlan, output, verification }`, plus
+`receipt` and `resumed` when receipts are in play. Over MCP the same result is returned without
+`serializedPlan`: it is a verbatim escaped copy of `plan`, and every tool that accepts a plan takes
+the object directly.
 
 #### `makeVertical(options)`
 
@@ -293,29 +296,74 @@ const verification = verifyMedia(output, replayed.expectations);
 | `extract-audio <input> --output`                   | complete audio extraction workflow        |
 | `extract-frame <input> --output`                   | complete frame extraction workflow        |
 | `concatenate <input> --inputs <paths...> --output` | complete concatenation workflow           |
+| `validate-plan <plan>`                             | report mechanical plan issues             |
+| `repair-plan <plan> --out`                         | repair a plan and report every change     |
 | `execute <plan> --output`                          | replay persisted Media IR                 |
+| `resume <receipt>`                                 | continue from a saved execution receipt   |
+| `receipt <path>`                                   | validate and print an execution receipt   |
+| `schema`                                           | print the canonical Media IR JSON Schema  |
 | `verify <output> --against`                        | verify media against persisted Media IR   |
 
-`vertical`, `optimize`, `normalize`, `extract-audio`, `extract-frame`, `concatenate`, and `execute` accept
-`--progress`. Successful result JSON is stdout; progress NDJSON and structured failures are stderr.
+`execute` and `resume` accept `--write-receipt` and `--resume` as described in Receipts below.
+`vertical`, `optimize`, `normalize`, `extract-audio`, `extract-frame`, `concatenate`, `execute`, and
+`resume` accept `--progress`. Successful result JSON is stdout; progress NDJSON and structured failures are stderr.
 
 ## MCP reference
 
-| Tool                     | Input summary                                        |
-| ------------------------ | ---------------------------------------------------- |
-| `inspect_media`          | `input` (read-only)                                  |
-| `get_media_capabilities` | none (read-only)                                     |
-| `plan_media`             | `input`, semantic `goals` (read-only)                |
-| `make_vertical`          | input/output, geometry, trim, size, audio, overwrite |
-| `optimize_for_web`       | input/output, trim, size, quality, audio, overwrite  |
-| `normalize_media`        | input/output, trim, audio, overwrite                 |
-| `extract_audio`          | input/output, format, trim, overwrite                |
-| `extract_frame`          | input/output, timestamp, format, overwrite           |
-| `concatenate_media`      | input, inputs[], output, overwrite                   |
-| `execute_media_plan`     | plan object or JSON, output, overwrite               |
-| `verify_media`           | output, plan object or JSON (read-only)              |
+| Tool                     | Input summary                                                |
+| ------------------------ | ------------------------------------------------------------ |
+| `inspect_media`          | `input` (read-only)                                          |
+| `get_media_capabilities` | none (read-only)                                             |
+| `plan_media`             | `input`, semantic `goals` (read-only)                        |
+| `validate_plan`          | plan object or JSON (read-only)                              |
+| `repair_plan`            | plan object or JSON (read-only)                              |
+| `get_media_plan_schema`  | none (read-only)                                             |
+| `make_vertical`          | input/output, geometry, trim, size, audio, overwrite         |
+| `optimize_for_web`       | input/output, trim, size, quality, audio, overwrite          |
+| `normalize_media`        | input/output, trim, audio, overwrite                         |
+| `extract_audio`          | input/output, format, trim, overwrite                        |
+| `extract_frame`          | input/output, timestamp, format, overwrite                   |
+| `concatenate_media`      | `inputs[]` in playback order, output, overwrite              |
+| `execute_media_plan`     | plan object or JSON, output, overwrite, writeReceipt, resume |
+| `resume_execution`       | receipt JSON, optional output, overwrite                     |
+| `inspect_receipt`        | receipt JSON (read-only)                                     |
+| `verify_media`           | output, plan object or JSON (read-only)                      |
+
+## Receipts
+
+`executePlan` and every workflow accept `writeReceipt` and `resume`. A receipt is a versioned JSON
+record written to `<output>.receipt.json` containing the plan, its fingerprint, the source
+fingerprint, the backend, the executed step ids, the output, and the verification report. A failed
+run writes one too, with a `failure` object carrying the stable error code.
+
+`resumeFromReceipt(receipt, options)` — and `agent-media resume` / `resume_execution` — skip
+execution when the recorded output still satisfies the same plan against an unchanged source, and
+re-execute otherwise. `receiptMatches(receipt, plan, source)` exposes that decision on its own.
+
+Checkpointing is at plan granularity: a plan compiles to a single FFmpeg invocation, so there is no
+intermediate state between steps to resume from.
+
+## Content checks
+
+`analyzeContent(output, options, ffmpegOptions)` decodes an output once and reports `blackFrames`,
+`silence`, `freeze`, and `completeness` as verification checks. Workflows and `executePlan` accept
+the same options through `contentChecks`, and merge the results into the verification report and
+the receipt. `warnOnly` lists check names that warn instead of failing.
+
+`verifyMedia(output, expectations, { customChecks, warnOnly })` is the extension point: a custom
+check receives the inspected output and returns named checks. A check that throws is isolated as a
+warning — never recorded as a pass.
+
+## Plan schema
+
+The canonical Media IR JSON Schema is generated from the Zod models by `pnpm generate:schema` and
+published two ways: as `docs/media-plan.schema.json` (the URL in `mediaPlanSchemaId`) and inside
+`@hadialmarzooq/agent-media-core` as the `./schema.json` export. Plans and receipts declaring a
+different version are rejected at the boundary with `INVALID_PLAN` naming both versions.
 
 MCP plan handoff does not require manual stringification. Failures use `isError: true` and the same
-structured error shape. All writer tools honor request cancellation and emit standard progress
+structured error shape; `execute_media_plan` fails that way when the output does not satisfy the
+plan, matching the workflow tools rather than returning a success envelope with `passed: false`.
+Every tool declares an `outputSchema` and returns `structuredContent` alongside the text result. All writer tools honor request cancellation and emit standard progress
 notifications when requested by the client. Read-only tools are annotated with `readOnlyHint`;
 writer tools with `destructiveHint`.

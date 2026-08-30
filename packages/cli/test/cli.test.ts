@@ -54,6 +54,11 @@ describe('CLI', () => {
       'extract-audio',
       'extract-frame',
       'concatenate',
+      'validate-plan',
+      'repair-plan',
+      'receipt',
+      'resume',
+      'schema',
       'execute',
       'verify',
     ]);

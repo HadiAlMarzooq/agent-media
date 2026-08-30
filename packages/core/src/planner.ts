@@ -23,6 +23,11 @@ export interface PlanRequest {
   source: MediaMetadata;
   goals: MediaGoals;
   capabilities?: FfmpegCapabilities;
+  /**
+   * Inspected metadata for the extra sources named by `goals.concatenate`, in the same order.
+   * Supplying it lets the planner record a real duration expectation instead of guessing.
+   */
+  additionalSources?: MediaMetadata[];
 }
 
 /** Turns a source description and semantic goals into versioned portable intent. */
@@ -101,9 +106,12 @@ export function planMedia(request: PlanRequest): MediaPlan {
       inputs: [source.path, ...goals.concatenate],
       reason: 'The caller requested multiple media sources joined in sequence.',
     });
-    if (source.durationSeconds !== undefined) {
-      expectations.durationSeconds = source.durationSeconds * (goals.concatenate.length + 1);
-    }
+    const joinedDuration = concatenatedDuration(
+      source,
+      goals.concatenate,
+      request.additionalSources,
+    );
+    if (joinedDuration !== undefined) expectations.durationSeconds = joinedDuration;
     expectations.audio = source.audio.present ? 'preserve' : 'remove';
   } else if (requiresEncoding(goals)) {
     assertCodecCapability(request.capabilities, goals, source);
@@ -286,6 +294,26 @@ function fail(message: string, context?: Record<string, unknown>): never {
     ...(context === undefined ? {} : { context }),
     suggestedActions: ['Adjust the semantic goals and create a new plan.'],
   });
+}
+
+/**
+ * Sum the durations of every clip in a concatenation. Returns undefined when any clip's duration
+ * is unknown: an omitted expectation is honest, a guessed one silently verifies the wrong output.
+ */
+function concatenatedDuration(
+  source: MediaMetadata,
+  additionalPaths: string[],
+  additionalSources: MediaMetadata[] | undefined,
+): number | undefined {
+  if (source.durationSeconds === undefined) return undefined;
+  if (additionalSources === undefined || additionalSources.length !== additionalPaths.length)
+    return undefined;
+  let total = source.durationSeconds;
+  for (const extra of additionalSources) {
+    if (extra.durationSeconds === undefined) return undefined;
+    total += extra.durationSeconds;
+  }
+  return total;
 }
 
 function requiresEncoding(goals: MediaGoals): boolean {

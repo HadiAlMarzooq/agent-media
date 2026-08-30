@@ -109,56 +109,66 @@ The product thesis stays narrow: a deterministic media runtime where `inspect �
 Mechanical plan issues should be detected and repaired before execution, not discovered as FFmpeg
 failures. Inspiration: videopython's `check` / `repair` / dimension normalization pattern.
 
-- [ ] Clamp impossible trims (start beyond duration, end before start).
-- [ ] Normalize concatenation constraints (detect stream mismatches, suggest normalization steps).
-- [ ] Detect dimension and aspect-ratio conflicts before compilation.
-- [ ] Report exactly what was repaired and why — structured, not silent.
-- [ ] CLI and MCP surface for `validate-plan` and `repair-plan`.
+- [x] Clamp impossible trims (start beyond duration, end before start).
+- [x] Normalize concatenation constraints (detect stream mismatches, suggest normalization steps).
+- [x] Detect dimension and aspect-ratio conflicts before compilation.
+- [x] Report exactly what was repaired and why — structured, not silent.
+- [x] CLI and MCP surface for `validate-plan` and `repair-plan`.
 
 ### Phase 13 — Execution and verification receipts
 
 Every execution should produce a versioned, durable JSON artifact that can power resume, replay,
 and reproducibility.
 
-- [ ] Define a receipt schema: plan ID/version, source fingerprints and metadata, backend and
+- [x] Define a receipt schema: plan ID/version, source fingerprints and metadata, backend and
       capabilities used, executed steps, output paths, verification checks, warnings, and
       failure/recovery state.
-- [ ] Emit receipts from `executePlan` and all five workflows.
-- [ ] CLI `receipt` command to inspect and replay from a saved receipt.
-- [ ] MCP `get_execution_receipt` tool.
-- [ ] Receipt-based replay: resume from the last successful checkpoint in a multi-step transform.
+- [x] Emit receipts from `executePlan` and all workflows, including a failure receipt when a run
+      does not complete.
+- [x] CLI `receipt` command to inspect a saved receipt, and `resume` to replay from one.
+- [x] MCP `inspect_receipt` and `resume_execution` tools. (Named for the existing `inspect_*`
+      convention rather than the `get_execution_receipt` sketched here.)
+- [x] Receipt-based replay: skip execution when the recorded output still satisfies the same plan
+      against an unchanged source.
 
 ### Phase 14 — Strict LLM-facing JSON Schema
 
 Generate machine-consumable schemas directly from the canonical plan and operation models so agent
 tooling cannot drift from the runtime.
 
-- [ ] Export Media IR v1 JSON Schema from the Zod models, not a hand-maintained file.
-- [ ] Publish the schema as a package artifact and a GitHub-hosted URL.
-- [ ] MCP tool descriptions reference the canonical schema URL.
-- [ ] Version the schema alongside Media IR and reject mismatched versions at boundaries.
+- [x] Export Media IR v1 JSON Schema from the Zod models, not a hand-maintained file.
+- [x] Publish the schema as a package artifact (`@hadialmarzooq/agent-media-core/schema.json`) and
+      a GitHub-hosted URL (`mediaPlanSchemaId`).
+- [x] MCP tool descriptions reference the canonical schema URL.
+- [x] Version the schema alongside Media IR and reject mismatched versions at boundaries.
 
 ### Phase 15 — Workflow state and resumability
 
 Support persisted plan state and idempotent execution checkpoints, especially for multi-step
 transforms and long-running operations.
 
-- [ ] Checkpoint after each step (trim, reframe, resize, encode).
-- [ ] Idempotent re-execution: if a checkpoint exists and the source hasn't changed, skip.
-- [ ] Resume from the last successful checkpoint after failure or cancellation.
-- [ ] CLI and MCP `resume` commands that accept a receipt.
+- [n/a] Checkpoint after each step (trim, reframe, resize, encode). A plan compiles to a single
+  FFmpeg invocation with one filter chain, so there is no intermediate state between steps to
+  checkpoint. Splitting it would mean writing and re-encoding intermediate files on every run —
+  slower, and a generation loss the single-pass design exists to avoid. Checkpointing is at
+  plan granularity instead, which is what the receipt records.
+- [x] Idempotent re-execution: if a receipt exists and the source hasn't changed, skip.
+- [x] Resume after failure or cancellation: failed runs write a receipt carrying the error code, so
+      a resume can tell "never executed" from "executed and did not satisfy the plan".
+- [x] CLI and MCP `resume` commands that accept a receipt.
 
-### Phase 15 — Extensible verification
+### Phase 16 — Extensible verification
 
 The verification model should be extensible enough to support content-quality checks beyond
 metadata — not immediately, but the architecture should not block it.
 
-- [ ] Plugin or hook system for custom verification checks.
-- [ ] Black-frame detection.
-- [ ] Silence detection.
-- [ ] Freeze detection.
-- [ ] Output package completeness (all expected streams present and playable).
-- [ ] Warnings vs. failures: a check can warn without failing the whole report.
+- [x] Plugin or hook system for custom verification checks (`verifyMedia` `customChecks`).
+- [x] Black-frame detection.
+- [x] Silence detection.
+- [x] Freeze detection.
+- [x] Output package completeness (all expected streams present and playable).
+- [x] Warnings vs. failures: a check can warn without failing the whole report, and a custom check
+      that throws is isolated as a warning rather than a silent pass.
 
 ### Not on the roadmap
 
