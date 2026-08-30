@@ -182,7 +182,10 @@ are monotonic, and completion is exactly 100. Intermediate timing fields are opt
 ### High-level workflows
 
 All five workflows share `WorkflowOptions` (input, output, overwrite, allowedOutputDirectory,
-signal, onProgress) and return `{ source, plan, serializedPlan, output, verification }`.
+signal, onProgress) and return `{ source, plan, serializedPlan, output, verification }`, plus
+`receipt` and `resumed` when receipts are in play. Over MCP the same result is returned without
+`serializedPlan`: it is a verbatim escaped copy of `plan`, and every tool that accepts a plan takes
+the object directly.
 
 #### `makeVertical(options)`
 
@@ -320,7 +323,7 @@ const verification = verifyMedia(output, replayed.expectations);
 | `normalize_media`        | input/output, trim, audio, overwrite                         |
 | `extract_audio`          | input/output, format, trim, overwrite                        |
 | `extract_frame`          | input/output, timestamp, format, overwrite                   |
-| `concatenate_media`      | input, inputs[], output, overwrite                           |
+| `concatenate_media`      | `inputs[]` in playback order, output, overwrite              |
 | `execute_media_plan`     | plan object or JSON, output, overwrite, writeReceipt, resume |
 | `resume_execution`       | receipt JSON, optional output, overwrite                     |
 | `inspect_receipt`        | receipt JSON (read-only)                                     |
@@ -359,6 +362,8 @@ published two ways: as `docs/media-plan.schema.json` (the URL in `mediaPlanSchem
 different version are rejected at the boundary with `INVALID_PLAN` naming both versions.
 
 MCP plan handoff does not require manual stringification. Failures use `isError: true` and the same
-structured error shape. All writer tools honor request cancellation and emit standard progress
+structured error shape; `execute_media_plan` fails that way when the output does not satisfy the
+plan, matching the workflow tools rather than returning a success envelope with `passed: false`.
+Every tool declares an `outputSchema` and returns `structuredContent` alongside the text result. All writer tools honor request cancellation and emit standard progress
 notifications when requested by the client. Read-only tools are annotated with `readOnlyHint`;
 writer tools with `destructiveHint`.

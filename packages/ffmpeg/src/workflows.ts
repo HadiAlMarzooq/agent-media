@@ -174,9 +174,20 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<Workfl
  */
 export async function concatenate(options: ConcatenateOptions): Promise<WorkflowResult> {
   const source = await inspectPhase(options, 'concatenation');
-  const plan = await planningPhase(options, 'concatenation', source, {
-    concatenate: options.inputs,
-  });
+  // Inspect every extra clip up front: it resolves their paths so the plan stays replayable from
+  // any working directory, fails fast on a missing file, and lets the planner expect a real
+  // joined duration rather than assuming every clip matches the first.
+  const additionalSources: MediaMetadata[] = [];
+  for (const extra of options.inputs) {
+    additionalSources.push(await inspectMedia(extra, ffmpegOptions(options)));
+  }
+  const plan = await planningPhase(
+    options,
+    'concatenation',
+    source,
+    { concatenate: additionalSources.map((extra) => extra.path) },
+    additionalSources,
+  );
   return executeAndVerify(options, source, plan, 'Concatenation is verified and ready.');
 }
 
@@ -222,12 +233,14 @@ async function planningPhase(
   label: string,
   source: MediaMetadata,
   goals: Record<string, unknown>,
+  additionalSources?: MediaMetadata[],
 ): Promise<MediaPlan> {
   emit(options.onProgress, 'planning', 15, `Creating a semantic plan for ${label}.`);
   const plan = planMedia({
     source,
     capabilities: await getCapabilities(ffmpegOptions(options)),
     goals: goals as never,
+    ...(additionalSources === undefined ? {} : { additionalSources }),
   });
   emit(options.onProgress, 'planning', 20, `${label} plan is ready.`);
   return plan;

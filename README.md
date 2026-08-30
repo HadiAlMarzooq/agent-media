@@ -112,7 +112,8 @@ const joined = await concatenate({
 console.log(vertical.verification.passed); // true, or throws VERIFICATION_FAILED
 ```
 
-Every workflow returns the same `{ source, plan, serializedPlan, output, verification }` structure.
+Every workflow returns the same `{ source, plan, serializedPlan, output, verification }` structure
+(MCP omits `serializedPlan`, which is a verbatim copy of `plan`).
 The plan is inspectable before execution, serializable to portable JSON, and the output is verified
 against the plan's expectations. Convenience without hiding the contract.
 
@@ -179,14 +180,16 @@ Run `agent-media-mcp` over stdio. It exposes sixteen semantic tools:
 - `normalize_media`
 - `extract_audio`
 - `extract_frame`
-- `concatenate_media`
+- `concatenate_media` — all clips in one ordered `inputs` list
 - `execute_media_plan` — supports `writeReceipt` and idempotent `resume`
 - `resume_execution` — continue from a saved receipt
 - `inspect_receipt` (read-only) — validate and read a saved receipt
 - `verify_media` (read-only)
 
 Read-only tools are annotated with `readOnlyHint`; writer tools with `destructiveHint` so clients
-like Claude Code can distinguish safe inspections from overwrite-capable calls.
+like Claude Code can distinguish safe inspections from overwrite-capable calls. Every tool declares
+an `outputSchema` and returns `structuredContent`, so results arrive typed rather than as text a
+client has to parse.
 
 `make_vertical`, `optimize_for_web`, `normalize_media`, `extract_audio`, `extract_frame`, and
 `execute_media_plan` send standard MCP progress notifications when the client requests progress.

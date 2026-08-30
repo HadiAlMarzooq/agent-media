@@ -37,6 +37,25 @@ describe('workspace foundation', () => {
     ).toThrowError(expect.objectContaining({ code: 'INVALID_PLAN' }));
   });
 
+  it('sums real clip durations when concatenating', () => {
+    const plan = planMedia({
+      source: videoSource,
+      goals: { concatenate: ['/media/second.mp4'] },
+      additionalSources: [{ ...videoSource, path: '/media/second.mp4', durationSeconds: 10 }],
+    });
+    expect(plan.expectations.durationSeconds).toBe(16);
+  });
+
+  it('omits the concatenated duration expectation when a clip duration is unknown', () => {
+    const plan = planMedia({
+      source: videoSource,
+      goals: { concatenate: ['/media/second.mp4'] },
+    });
+    // Guessing 6s x 2 here would let a wrong output verify green; omitting is the honest default.
+    expect(plan.expectations.durationSeconds).toBeUndefined();
+    expect(plan.expectations.audio).toBe('preserve');
+  });
+
   it('rejects an empty goals object with INVALID_PLAN', () => {
     expect(() => planMedia({ source: videoSource, goals: {} })).toThrowError(
       expect.objectContaining({ code: 'INVALID_PLAN' }),
