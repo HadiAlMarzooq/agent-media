@@ -377,8 +377,7 @@ describe('execution', () => {
   it('runs the concatenate workflow and produces a longer output', async () => {
     const output = join(directory, 'concat-workflow.mp4');
     const result = await concatenate({
-      input: fixture,
-      inputs: [fixture],
+      inputs: [fixture, fixture],
       output,
       overwrite: true,
     });
@@ -632,6 +631,14 @@ describe('execution', () => {
     const rerun = await resumeFromReceipt(receipt);
     expect(rerun.resumed).toBeUndefined();
     await expect(accessFile(output)).resolves.toBe(output);
+  });
+
+  it('rejects a concatenation of fewer than two clips', async () => {
+    await expect(
+      concatenate({ inputs: [fixture], output: join(directory, 'one-clip.mp4') }),
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: 'INVALID_PLAN', message: expect.stringContaining('two') }),
+    );
   });
 });
 

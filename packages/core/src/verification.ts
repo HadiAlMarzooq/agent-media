@@ -45,7 +45,7 @@ export function verifyMedia(
   }
   if (expectations.aspectRatio !== undefined) {
     checks.aspectRatio = check(
-      output.video?.aspectRatio === expectations.aspectRatio,
+      matchesAspectRatio(output.video, expectations.aspectRatio),
       expectations.aspectRatio,
       output.video?.aspectRatio,
       'Output aspect ratio does not match the requested ratio.',
@@ -149,6 +149,35 @@ export function verifyMedia(
     failures.push('unverifiable: The plan recorded no expectations to verify against.');
   }
   return { passed: failures.length === 0 && hasChecks, checks, failures, warnings };
+}
+
+/**
+ * Compare the output's real geometry against the requested ratio numerically, within a tolerance.
+ *
+ * Exact equality cannot be met in general: cropping 1920x1080 to 9:16 wants a 607.5px width, and
+ * encoders need even dimensions, so the honest result is 606x1080 — visually 9:16, arithmetically
+ * 101:180. Demanding an exact reduced fraction fails correct output. The tolerance is tight enough
+ * that a genuinely wrong ratio (4:3 against 16:9) still fails.
+ */
+const ASPECT_RATIO_TOLERANCE = 0.01;
+
+function matchesAspectRatio(video: MediaMetadata['video'], expected: string): boolean {
+  if (video === undefined) return false;
+  if (video.aspectRatio === expected) return true;
+  const [expectedWidth, expectedHeight] = expected.split(':').map(Number);
+  if (
+    expectedWidth === undefined ||
+    expectedHeight === undefined ||
+    !Number.isFinite(expectedWidth) ||
+    !Number.isFinite(expectedHeight) ||
+    expectedHeight === 0 ||
+    video.height === 0
+  ) {
+    return false;
+  }
+  const target = expectedWidth / expectedHeight;
+  const actual = video.width / video.height;
+  return Math.abs(actual - target) / target <= ASPECT_RATIO_TOLERANCE;
 }
 
 function check(

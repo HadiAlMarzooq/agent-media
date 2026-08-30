@@ -379,3 +379,34 @@ describe('concatenation normalization', () => {
     expect(issue?.normalization?.[0]?.differences).toContain('audio.present');
   });
 });
+
+describe('aspect ratio verification', () => {
+  const output = (width: number, height: number, ratio: string): MediaMetadata => ({
+    ...source,
+    path: '/media/out.mp4',
+    video: { width, height, aspectRatio: ratio, codec: 'h264', pixelFormat: 'yuv420p' },
+  });
+
+  it('accepts the even-dimension crop a 9:16 request actually produces', () => {
+    // 1920x1080 cropped to 9:16 wants 607.5px; encoders need even dimensions, so 606x1080.
+    const report = verifyMedia(output(606, 1080, '101:180'), { aspectRatio: '9:16' });
+    expect(report.passed).toBe(true);
+  });
+
+  it('still rejects a genuinely different ratio', () => {
+    const report = verifyMedia(output(1440, 1080, '4:3'), { aspectRatio: '16:9' });
+    expect(report.passed).toBe(false);
+    expect(report.failures[0]).toContain('aspectRatio');
+  });
+
+  it('rejects an output with no video stream', () => {
+    const audioOnly: MediaMetadata = {
+      path: source.path,
+      kind: 'audio',
+      sizeBytes: source.sizeBytes,
+      audio: source.audio,
+    };
+    const report = verifyMedia(audioOnly, { aspectRatio: '9:16' });
+    expect(report.passed).toBe(false);
+  });
+});

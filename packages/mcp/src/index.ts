@@ -30,7 +30,7 @@ import {
   normalize,
   optimizeForWeb,
 } from '@hadialmarzooq/agent-media-ffmpeg';
-import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
+import type { ContentCheckOptions, MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
 
 const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
@@ -143,6 +143,48 @@ const workflowResultShape = {
   resumed: z.boolean().optional(),
   receipt: receiptSchema.optional(),
 };
+
+// Content checks are opt-in per call: they cost a full decode of the output.
+const contentChecksSchema = z
+  .object({
+    blackFrames: z
+      .union([z.boolean(), z.object({ minDurationSeconds: z.number().positive() })])
+      .optional(),
+    silence: z
+      .union([
+        z.boolean(),
+        z.object({
+          thresholdDb: z.number().optional(),
+          minDurationSeconds: z.number().positive().optional(),
+        }),
+      ])
+      .optional(),
+    freeze: z
+      .union([z.boolean(), z.object({ minDurationSeconds: z.number().positive() })])
+      .optional(),
+    completeness: z.boolean().optional(),
+  })
+  .strict();
+
+const contentCheckInputs = {
+  contentChecks: contentChecksSchema
+    .optional()
+    .describe('Decode the output once and check what it contains, not just its shape.'),
+  warnOnly: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('Check names that warn instead of failing the call.'),
+};
+
+/**
+ * The zod-inferred shape and `ContentCheckOptions` describe the same values; they differ only in
+ * how each spells "this sub-field may be absent" under exactOptionalPropertyTypes.
+ */
+function contentCheckOptions(value: z.infer<typeof contentChecksSchema> | undefined): {
+  contentChecks?: ContentCheckOptions;
+} {
+  return value === undefined ? {} : { contentChecks: value as ContentCheckOptions };
+}
 
 const readOnlyHint = { readOnlyHint: true } as const;
 const destructiveHint = { destructiveHint: true } as const;
@@ -297,6 +339,7 @@ export function createMcpServer(): McpServer {
         maxSizeMB: z.number().positive().optional(),
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: workflowResultShape,
       annotations: destructiveHint,
@@ -319,6 +362,8 @@ export function createMcpServer(): McpServer {
             ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
             ...(options.audio === undefined ? {} : { audio: options.audio }),
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -342,6 +387,7 @@ export function createMcpServer(): McpServer {
         quality: z.enum(['high', 'balanced', 'small']).optional(),
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: workflowResultShape,
       annotations: destructiveHint,
@@ -363,6 +409,8 @@ export function createMcpServer(): McpServer {
             ...(options.quality === undefined ? {} : { quality: options.quality }),
             ...(options.audio === undefined ? {} : { audio: options.audio }),
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -384,6 +432,7 @@ export function createMcpServer(): McpServer {
         durationSeconds: z.number().positive().optional(),
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: workflowResultShape,
       annotations: destructiveHint,
@@ -403,6 +452,8 @@ export function createMcpServer(): McpServer {
               : { durationSeconds: options.durationSeconds }),
             ...(options.audio === undefined ? {} : { audio: options.audio }),
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -424,6 +475,7 @@ export function createMcpServer(): McpServer {
         trimStartSeconds: z.number().nonnegative().optional(),
         durationSeconds: z.number().positive().optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: workflowResultShape,
       annotations: destructiveHint,
@@ -443,6 +495,8 @@ export function createMcpServer(): McpServer {
               ? {}
               : { durationSeconds: options.durationSeconds }),
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -463,6 +517,7 @@ export function createMcpServer(): McpServer {
         atSeconds: z.number().nonnegative().optional(),
         format: z.enum(['jpg', 'png']).optional(),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: workflowResultShape,
       annotations: destructiveHint,
@@ -477,6 +532,8 @@ export function createMcpServer(): McpServer {
             ...(options.atSeconds === undefined ? {} : { atSeconds: options.atSeconds }),
             ...(options.format === undefined ? {} : { format: options.format }),
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -498,6 +555,7 @@ export function createMcpServer(): McpServer {
           .describe('Every clip to join, in playback order. The first entry leads the output.'),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: workflowResultShape,
       annotations: destructiveHint,
@@ -507,10 +565,11 @@ export function createMcpServer(): McpServer {
       const response = await safely(async () =>
         workflowResponse(
           await concatenate({
-            input: options.inputs[0] as string,
-            inputs: options.inputs.slice(1),
+            inputs: options.inputs,
             output: options.output,
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+            ...contentCheckOptions(options.contentChecks),
+            ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -530,6 +589,7 @@ export function createMcpServer(): McpServer {
         overwrite: z.boolean().optional(),
         writeReceipt: z.boolean().optional(),
         resume: z.boolean().optional(),
+        ...contentCheckInputs,
       },
       outputSchema: {
         output: z.string(),
@@ -539,7 +599,10 @@ export function createMcpServer(): McpServer {
       },
       annotations: destructiveHint,
     },
-    async ({ plan: input, output, overwrite, writeReceipt, resume }, extra) => {
+    async (
+      { plan: input, output, overwrite, writeReceipt, resume, contentChecks, warnOnly },
+      extra,
+    ) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () => {
         const plan = normalizePlan(input);
@@ -548,6 +611,8 @@ export function createMcpServer(): McpServer {
           ...(overwrite === undefined ? {} : { overwrite }),
           ...(writeReceipt === undefined ? {} : { writeReceipt }),
           ...(resume === undefined ? {} : { resume }),
+          ...contentCheckOptions(contentChecks),
+          ...(warnOnly === undefined ? {} : { warnOnly }),
           signal: extra.signal,
           onProgress: notifications.notify,
         });

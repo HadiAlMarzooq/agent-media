@@ -40,6 +40,28 @@ npm install @hadialmarzooq/agent-media-mcp
 
 Prerequisites: Node.js 22+, `ffmpeg` and `ffprobe` on `PATH`.
 
+Point an agent at it in one command:
+
+```bash
+claude mcp add agent-media -- agent-media-mcp
+```
+
+Or, in any MCP client's config:
+
+```json
+{
+  "mcpServers": {
+    "agent-media": { "command": "agent-media-mcp" }
+  }
+}
+```
+
+Then ask for the outcome, not the flags — _"make talk.mp4 vertical for shorts, under 25 MB"_ — and
+the agent gets a plan it can show you, an execution, and a verification that either passed or names
+what failed.
+
+**New here? Read the [usage guide](docs/usage.md).** It covers all three surfaces task by task.
+
 ## Why Agent Media
 
 Most media wrappers stop after a subprocess exits successfully. Agent Media treats that as only one
@@ -102,10 +124,9 @@ const audio = await extractAudio({ input: 'demo.mp4', output: 'audio.m4a' });
 // Extract a still frame
 const frame = await extractFrame({ input: 'demo.mp4', output: 'frame.jpg', atSeconds: 2 });
 
-// Concatenate multiple sources
+// Concatenate multiple sources — every clip, in playback order
 const joined = await concatenate({
-  input: 'demo.mp4',
-  inputs: ['clip2.mp4'],
+  inputs: ['demo.mp4', 'clip2.mp4'],
   output: 'joined.mp4',
 });
 
@@ -116,6 +137,47 @@ Every workflow returns the same `{ source, plan, serializedPlan, output, verific
 (MCP omits `serializedPlan`, which is a verbatim copy of `plan`).
 The plan is inspectable before execution, serializable to portable JSON, and the output is verified
 against the plan's expectations. Convenience without hiding the contract.
+
+## Usage at a glance
+
+The [usage guide](docs/usage.md) is the full tour. Three things worth seeing up front:
+
+**A plan is reviewable before anything is written.** Each step carries the reason it exists:
+
+```jsonc
+// agent-media plan talk.mp4 --aspect 9:16 --max-size 25
+{
+  "id": "reframe-1",
+  "operation": "reframe",
+  "aspectRatio": "9:16",
+  "strategy": "center",
+  "reason": "The requested output aspect ratio differs from the source.",
+}
+```
+
+**A failure is evidence, not a stack trace.** Every error carries a stable code and what to do next:
+
+```json
+{
+  "code": "VERIFICATION_FAILED",
+  "message": "The workflow completed, but the output did not satisfy its plan.",
+  "context": {
+    "verification": { "failures": ["maxFileSize: Output exceeds the requested maximum file size."] }
+  },
+  "suggestedActions": ["Inspect the failed checks, adjust the semantic goals, and retry."]
+}
+```
+
+That is enough for an agent to loosen the one constraint that failed and retry, which is exactly
+what `pnpm demo` does.
+
+**A retried step is idempotent.** Write a receipt once, and resuming from it re-encodes nothing when
+the output still satisfies the plan:
+
+```bash
+agent-media execute plan.json --output out.mp4 --write-receipt
+agent-media resume out.mp4.receipt.json   # → { "resumed": true }
+```
 
 ## See the full agent loop
 
@@ -283,6 +345,7 @@ methodology.
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [Usage guide](docs/usage.md)
 - [Getting started](docs/getting-started.md)
 - [Workflows and recovery](docs/workflows.md)
 - [API and protocol reference](docs/api.md)

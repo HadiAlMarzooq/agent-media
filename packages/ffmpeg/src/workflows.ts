@@ -66,7 +66,12 @@ export interface ExtractFrameOptions extends WorkflowOptions {
   format?: 'jpg' | 'png';
 }
 
-export interface ConcatenateOptions extends WorkflowOptions {
+/**
+ * `inputs` is every clip to join, in playback order — not "the extra clips after `input`".
+ * A split signature reads as either one, and passing the whole list to the wrong half silently
+ * duplicates a clip.
+ */
+export interface ConcatenateOptions extends Omit<WorkflowOptions, 'input'> {
   inputs: string[];
 }
 
@@ -173,22 +178,32 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<Workfl
  * Inspect, plan, execute, and verify concatenation of multiple media sources.
  */
 export async function concatenate(options: ConcatenateOptions): Promise<WorkflowResult> {
-  const source = await inspectPhase(options, 'concatenation');
+  const [lead, ...extras] = options.inputs;
+  if (lead === undefined || extras.length === 0) {
+    throw new MediaError({
+      code: 'INVALID_PLAN',
+      message: 'Concatenation needs at least two clips.',
+      context: { inputs: options.inputs },
+      suggestedActions: ['Pass every clip to join in `inputs`, in playback order.'],
+    });
+  }
+  const workflowOptions: WorkflowOptions = { ...options, input: lead };
+  const source = await inspectPhase(workflowOptions, 'concatenation');
   // Inspect every extra clip up front: it resolves their paths so the plan stays replayable from
   // any working directory, fails fast on a missing file, and lets the planner expect a real
   // joined duration rather than assuming every clip matches the first.
   const additionalSources: MediaMetadata[] = [];
-  for (const extra of options.inputs) {
-    additionalSources.push(await inspectMedia(extra, ffmpegOptions(options)));
+  for (const extra of extras) {
+    additionalSources.push(await inspectMedia(extra, ffmpegOptions(workflowOptions)));
   }
   const plan = await planningPhase(
-    options,
+    workflowOptions,
     'concatenation',
     source,
     { concatenate: additionalSources.map((extra) => extra.path) },
     additionalSources,
   );
-  return executeAndVerify(options, source, plan, 'Concatenation is verified and ready.');
+  return executeAndVerify(workflowOptions, source, plan, 'Concatenation is verified and ready.');
 }
 
 function verticalDimensions(

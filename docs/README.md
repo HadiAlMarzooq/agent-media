@@ -10,6 +10,7 @@ Start with the guide that matches your task:
 
 | Guide                                            | Use it when you want to…                               |
 | ------------------------------------------------ | ------------------------------------------------------ |
+| [Usage guide](usage.md)                          | drive it from an agent, the CLI, or TypeScript         |
 | [Getting started](getting-started.md)            | install prerequisites and run the first transformation |
 | [Workflows](workflows.md)                        | use `makeVertical`, progress, replay, or recovery      |
 | [API reference](api.md)                          | integrate the TypeScript SDK, CLI, or MCP surface      |
@@ -26,5 +27,5 @@ The runnable examples are:
 - [`vertical-video.ts`](../examples/vertical-video.ts): explicit inspect-plan-execute-verify pipeline;
 - [`mcp-config.json`](../examples/mcp-config.json): minimal MCP stdio configuration.
 
-Packages remain unpublished during the private release-candidate stage. API documentation describes
-the current repository build and GitHub prerelease artifacts.
+All four packages are published to npm. The documentation describes the current release; anything
+still in progress is tracked in the [roadmap](../ROADMAP.md).

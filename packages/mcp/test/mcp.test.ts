@@ -640,6 +640,37 @@ describe('MCP adapter', () => {
       await server.close();
     }
   });
+
+  it('runs content checks requested through a workflow tool', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-content-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const result = parseToolResult(
+        await client.callTool({
+          name: 'make_vertical',
+          arguments: {
+            input: fixture,
+            output: join(directory, 'content-checked.mp4'),
+            width: 180,
+            height: 320,
+            overwrite: true,
+            contentChecks: { blackFrames: true, completeness: true },
+            warnOnly: ['blackFrames'],
+          },
+        }),
+      ) as { verification: { checks: Record<string, unknown>; warnings: string[] } };
+      expect(result.verification.checks.blackFrames).toBeDefined();
+      expect(result.verification.checks.completeness).toBeDefined();
+      expect(result.verification.warnings).toEqual([]);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
 });
 
 function parseToolResult(response: unknown): unknown {

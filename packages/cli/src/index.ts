@@ -214,8 +214,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await concatenate({
-          input,
-          inputs: options.inputs,
+          inputs: [input, ...options.inputs],
           output: options.output,
           overwrite: options.overwrite,
           ...(onProgress === undefined ? {} : { onProgress }),
@@ -295,10 +294,25 @@ export function createProgram(): Command {
         ...(options.writeReceipt === undefined ? {} : { writeReceipt: options.writeReceipt }),
         ...(options.resume === undefined ? {} : { resume: options.resume }),
       });
+      // Execution already verified the output to build its receipt, and a resumed run carries the
+      // verification its receipt recorded.
+      const verification =
+        result.verification ??
+        result.receipt?.verification ??
+        verifyMedia(await inspectMedia(result.output), plan.expectations);
+      if (!verification.passed) {
+        throw new MediaError({
+          code: 'VERIFICATION_FAILED',
+          message: 'The plan executed, but the output did not satisfy its expectations.',
+          context: { output: result.output, verification },
+          suggestedActions: ['Inspect the failed checks, adjust the plan, and retry.'],
+        });
+      }
       print({
         output: result.output,
         ...(result.resumed === undefined ? {} : { resumed: result.resumed }),
-        verification: verifyMedia(await inspectMedia(result.output), plan.expectations),
+        ...(result.receipt === undefined ? {} : { receipt: result.receipt }),
+        verification,
       });
     });
   program
