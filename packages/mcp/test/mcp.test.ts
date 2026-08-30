@@ -217,7 +217,7 @@ describe('MCP adapter', () => {
     }
   });
 
-  it('registers eleven semantic tools', async () => {
+  it('registers sixteen semantic tools', async () => {
     const server = createMcpServer();
     const client = new Client({ name: 'agent-media-test', version: '1.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -226,12 +226,16 @@ describe('MCP adapter', () => {
 
     try {
       const { tools } = await client.listTools();
-      expect(tools.length).toBe(11);
+      expect(tools.length).toBe(16);
       expect(tools.map((t) => t.name)).toEqual(
         expect.arrayContaining([
+          'resume_execution',
           'inspect_media',
           'get_media_capabilities',
           'plan_media',
+          'validate_plan',
+          'repair_plan',
+          'get_media_plan_schema',
           'make_vertical',
           'optimize_for_web',
           'normalize_media',
@@ -239,6 +243,7 @@ describe('MCP adapter', () => {
           'extract_frame',
           'concatenate_media',
           'execute_media_plan',
+          'inspect_receipt',
           'verify_media',
         ]),
       );
@@ -261,6 +266,230 @@ describe('MCP adapter', () => {
       const vertical = tools.find((t) => t.name === 'make_vertical');
       expect(inspect?.annotations?.readOnlyHint).toBe(true);
       expect(vertical?.annotations?.destructiveHint).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('detects and repairs plan issues through the MCP protocol', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-repair-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      // planMedia refuses to emit a trim past the source, so this is an externally authored
+      // plan - replayed against a shorter source, or hand-written by an agent.
+      const planned = {
+        plan: {
+          irVersion: '1',
+          source: { path: fixture },
+          constraints: {},
+          steps: [
+            { id: 'trim', operation: 'trim', startSeconds: 0, endSeconds: 99, reason: 'external' },
+          ],
+          expectations: { durationSeconds: 99 },
+        },
+      };
+
+      const issues = parseToolResult(
+        await client.callTool({
+          name: 'validate_plan',
+          arguments: { plan: planned.plan },
+        }),
+      ) as { issues: Array<{ field: string; repairable: boolean }> };
+      expect(issues.issues.some((issue) => issue.field.includes('endSeconds'))).toBe(true);
+
+      const repaired = parseToolResult(
+        await client.callTool({
+          name: 'repair_plan',
+          arguments: { plan: planned.plan },
+        }),
+      ) as { repairs: Array<{ field: string }>; repairedPlan: Record<string, unknown> };
+      expect(repaired.repairs.length).toBeGreaterThan(0);
+      expect(repaired.repairedPlan).toBeDefined();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('executes with writeReceipt and inspects the receipt', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-receipt-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const planned = parseToolResult(
+        await client.callTool({
+          name: 'plan_media',
+          arguments: { input: fixture, goals: { compatibility: 'high', durationSeconds: 1 } },
+        }),
+      ) as { plan: Record<string, unknown> };
+
+      const output = join(directory, 'mcp-receipt.mp4');
+      const executed = parseToolResult(
+        await client.callTool({
+          name: 'execute_media_plan',
+          arguments: { plan: planned.plan, output, writeReceipt: true },
+        }),
+      ) as { receipt: { receiptVersion: string; planFingerprint: string } };
+      expect(executed.receipt.receiptVersion).toBe('1');
+
+      const inspected = parseToolResult(
+        await client.callTool({
+          name: 'inspect_receipt',
+          arguments: { receipt: JSON.stringify(executed.receipt) },
+        }),
+      ) as { receiptVersion: string };
+      expect(inspected.receiptVersion).toBe('1');
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('resumes an execution from its receipt', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-resume-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const planned = parseToolResult(
+        await client.callTool({
+          name: 'plan_media',
+          arguments: { input: fixture, goals: { compatibility: 'high', durationSeconds: 1 } },
+        }),
+      ) as { plan: Record<string, unknown> };
+
+      const output = join(directory, 'mcp-resume.mp4');
+      const executed = parseToolResult(
+        await client.callTool({
+          name: 'execute_media_plan',
+          arguments: { plan: planned.plan, output, writeReceipt: true },
+        }),
+      ) as { receipt: unknown };
+
+      const resumed = parseToolResult(
+        await client.callTool({
+          name: 'resume_execution',
+          arguments: { receipt: JSON.stringify(executed.receipt) },
+        }),
+      ) as { resumed: boolean; output: string };
+      expect(resumed.resumed).toBe(true);
+      expect(resumed.output).toBe(output);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('serves the canonical Media IR schema and names it in plan tool descriptions', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-schema-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const schema = parseToolResult(
+        await client.callTool({ name: 'get_media_plan_schema', arguments: {} }),
+      ) as { $id: string; schema: { properties?: Record<string, unknown> } };
+      expect(schema.$id).toContain('media-plan.schema.json');
+      expect(schema.schema.properties).toHaveProperty('steps');
+
+      const { tools } = await client.listTools();
+      const planTool = tools.find((tool) => tool.name === 'plan_media');
+      expect(planTool?.description).toContain(schema.$id);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('reports concatenation stream conflicts with a normalization plan', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-concat-conflict', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const odd = join(directory, 'odd-layout.mp4');
+      await execFileAsync('ffmpeg', [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc2=size=640x360:rate=30',
+        '-t',
+        '1',
+        '-c:v',
+        'libx264',
+        '-an',
+        odd,
+      ]);
+      const issues = parseToolResult(
+        await client.callTool({
+          name: 'validate_plan',
+          arguments: {
+            plan: {
+              irVersion: '1',
+              source: { path: fixture },
+              constraints: {},
+              steps: [
+                { id: 'join', operation: 'concatenate', inputs: [fixture, odd], reason: 'test' },
+              ],
+              expectations: { durationSeconds: 3 },
+            },
+          },
+        }),
+      ) as {
+        issues: Array<{ field: string; normalization?: Array<{ input: string; plan: unknown }> }>;
+      };
+      const conflict = issues.issues.find((issue) => issue.normalization !== undefined);
+      expect(conflict?.normalization?.[0]?.input).toBe(odd);
+      expect(conflict?.normalization?.[0]?.plan).toBeDefined();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('rejects a plan from a different Media IR version by name', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-version-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const response = await client.callTool({
+        name: 'validate_plan',
+        arguments: {
+          plan: {
+            irVersion: '2',
+            source: { path: fixture },
+            constraints: {},
+            steps: [],
+            expectations: {},
+          },
+        },
+      });
+      expect(response.isError).toBe(true);
+      expect(parseToolResult(response)).toMatchObject({
+        code: 'INVALID_PLAN',
+        message: expect.stringContaining('version 2 is not supported'),
+      });
     } finally {
       await client.close();
       await server.close();

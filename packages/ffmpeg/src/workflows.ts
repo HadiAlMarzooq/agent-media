@@ -1,6 +1,12 @@
 import { MediaError, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
-import type { MediaMetadata, MediaPlan, VerificationReport } from '@hadialmarzooq/agent-media-core';
+import type {
+  ExecutionReceipt,
+  MediaMetadata,
+  MediaPlan,
+  VerificationReport,
+} from '@hadialmarzooq/agent-media-core';
 
+import { analyzeContent, type ContentCheckOptions } from './content.js';
 import { executePlan, type ExecuteOptions } from './executor.js';
 import { getCapabilities } from './capabilities.js';
 import { inspectMedia, type FfmpegOptions } from './inspect.js';
@@ -13,6 +19,17 @@ export interface WorkflowOptions extends FfmpegOptions {
   allowedOutputDirectory?: string;
   signal?: AbortSignal;
   onProgress?: ProgressCallback;
+  /** Write a durable receipt to `${output}.receipt.json` after execution. */
+  writeReceipt?: boolean;
+  /**
+   * Idempotent resume: skip execution when a passing receipt exists for the
+   * same plan and unchanged source, and return the recorded output.
+   */
+  resume?: boolean;
+  /** Content checks to run against the output alongside metadata verification. */
+  contentChecks?: ContentCheckOptions;
+  /** Check names that warn instead of failing the report. */
+  warnOnly?: string[];
 }
 
 export interface MakeVerticalOptions extends WorkflowOptions {
@@ -59,6 +76,10 @@ export interface WorkflowResult {
   serializedPlan: string;
   output: MediaMetadata;
   verification: VerificationReport;
+  /** Durable execution receipt, present when execution completed. */
+  receipt?: ExecutionReceipt;
+  /** True when execution was skipped because a passing receipt matched. */
+  resumed?: boolean;
 }
 
 /**
@@ -229,6 +250,10 @@ async function executeAndVerify(
       ? {}
       : { allowedOutputDirectory: options.allowedOutputDirectory }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.writeReceipt === undefined ? {} : { writeReceipt: options.writeReceipt }),
+    ...(options.resume === undefined ? {} : { resume: options.resume }),
+    ...(options.contentChecks === undefined ? {} : { contentChecks: options.contentChecks }),
+    ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
     onProgress: (progress) => {
       const percent = 20 + Math.round(progress.percent * 0.7);
       safelyNotify(options.onProgress, { ...progress, percent });
@@ -237,8 +262,12 @@ async function executeAndVerify(
   const execution = await executePlan(plan, executeOptions);
 
   emit(options.onProgress, 'verifying', 92, 'Inspecting and verifying the output.');
-  const output = await inspectMedia(execution.output, ffmpegOptions(options));
-  const verification = verifyMedia(output, plan.expectations);
+  // Execution already probed and verified the output to build its receipt; re-probing here would
+  // repeat that work, and re-verifying without the content checks would quietly drop them.
+  const output =
+    execution.outputMetadata ?? (await inspectMedia(execution.output, ffmpegOptions(options)));
+  const verification =
+    execution.verification ?? (await verifyWithContentChecks(options, output, plan));
   if (!verification.passed) {
     throw new MediaError({
       code: 'VERIFICATION_FAILED',
@@ -249,7 +278,30 @@ async function executeAndVerify(
   }
   emit(options.onProgress, 'completed', 100, completionMessage);
   const serializedPlan = serializePlan(plan);
-  return { source, plan, serializedPlan, output, verification };
+  return {
+    source,
+    plan,
+    serializedPlan,
+    output,
+    verification,
+    ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
+    ...(execution.resumed === undefined ? {} : { resumed: execution.resumed }),
+  };
+}
+
+async function verifyWithContentChecks(
+  options: WorkflowOptions,
+  output: MediaMetadata,
+  plan: MediaPlan,
+): Promise<VerificationReport> {
+  const contentChecks =
+    options.contentChecks === undefined
+      ? {}
+      : await analyzeContent(output, options.contentChecks, ffmpegOptions(options));
+  return verifyMedia(output, plan.expectations, {
+    customChecks: [() => contentChecks],
+    ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+  });
 }
 
 function emit(

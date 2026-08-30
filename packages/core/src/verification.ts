@@ -12,12 +12,26 @@ export interface VerificationReport {
   passed: boolean;
   checks: Record<string, VerificationCheck>;
   failures: string[];
+  warnings: string[];
+}
+
+/** A custom verification check: receives the inspected output, returns named checks. */
+export type CustomVerificationCheck = (
+  output: MediaMetadata,
+) => Record<string, VerificationCheck> | null;
+
+export interface VerifyOptions {
+  /** Custom checks merged into the report after the plan's expectations. */
+  customChecks?: CustomVerificationCheck[];
+  /** Check names that warn instead of fail. A failing warn-only check never fails the report. */
+  warnOnly?: string[];
 }
 
 /** Verify inspected output against the semantic expectations recorded in a plan. */
 export function verifyMedia(
   output: MediaMetadata,
   expectations: MediaExpectations,
+  options: VerifyOptions = {},
 ): VerificationReport {
   const checks: Record<string, VerificationCheck> = {};
   if (expectations.durationSeconds !== undefined) {
@@ -95,14 +109,46 @@ export function verifyMedia(
       'Output pixel format does not match the requested compatibility profile.',
     );
   }
-  const failures = Object.entries(checks)
-    .filter(([, result]) => !result.passed)
-    .map(([name, result]) => `${name}: ${result.message}`);
-  const passed = failures.length === 0 && Object.keys(checks).length > 0;
-  if (Object.keys(checks).length === 0) {
+  // A custom check that throws is isolated: it is recorded as a failed check but always
+  // downgraded to a warning, so a broken plugin cannot crash verification or fail an output
+  // that satisfies its plan. It is never recorded as a pass — it did not run.
+  const isolated = new Set<string>();
+  const customChecks = options.customChecks ?? [];
+  for (const [index, customCheck] of customChecks.entries()) {
+    let custom: Record<string, VerificationCheck> | null = null;
+    try {
+      custom = customCheck(output);
+    } catch (error) {
+      const name = `customCheck-${index + 1}`;
+      isolated.add(name);
+      checks[name] = {
+        passed: false,
+        expected: 'custom check executes',
+        actual: 'custom check threw',
+        message: `A custom verification check threw and was skipped: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+    if (custom === null) continue;
+    for (const [name, result] of Object.entries(custom)) {
+      checks[name] = result;
+    }
+  }
+
+  const warnOnly = new Set(options.warnOnly ?? []);
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  for (const [name, result] of Object.entries(checks)) {
+    if (result.passed) continue;
+    if (warnOnly.has(name) || isolated.has(name)) warnings.push(`${name}: ${result.message}`);
+    else failures.push(`${name}: ${result.message}`);
+  }
+  const hasChecks = Object.keys(checks).some((name) => !isolated.has(name));
+  if (!hasChecks) {
     failures.push('unverifiable: The plan recorded no expectations to verify against.');
   }
-  return { passed, checks, failures };
+  return { passed: failures.length === 0 && hasChecks, checks, failures, warnings };
 }
 
 function check(

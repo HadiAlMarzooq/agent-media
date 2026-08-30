@@ -11,12 +11,18 @@ import {
   planMedia,
   validatePlan,
   verifyMedia,
+  inspectPlanIssues,
+  repairPlan,
+  parseReceipt,
+  mediaPlanSchemaId,
+  mediaPlanSchemaVersion,
 } from '@hadialmarzooq/agent-media-core';
-import type { MediaGoals, MediaPlan } from '@hadialmarzooq/agent-media-core';
+import type { MediaGoals, MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 import {
   concatenate,
   executePlan,
   extractAudio,
+  resumeFromReceipt,
   extractFrame,
   getCapabilities,
   inspectMedia,
@@ -64,8 +70,10 @@ function validateGoalSchema(goals: z.infer<typeof goalSchema>): z.infer<typeof g
   return goals;
 }
 
+// `irVersion` is accepted as any string here on purpose: the runtime's own boundary check reports
+// an unsupported version by name, which is more useful than a schema mismatch on a literal.
 const planRefSchema = z
-  .object({ irVersion: z.literal('1'), source: z.object({ path: z.string() }) })
+  .object({ irVersion: z.string().min(1), source: z.object({ path: z.string() }) })
   .passthrough();
 
 const readOnlyHint = { readOnlyHint: true } as const;
@@ -94,8 +102,7 @@ export function createMcpServer(): McpServer {
   server.registerTool(
     'plan_media',
     {
-      description:
-        'Create an inspectable versioned semantic Media IR plan from semantic goals. All goals in the MediaGoals type are accepted.',
+      description: `Create an inspectable versioned semantic Media IR plan from semantic goals. All goals in the MediaGoals type are accepted. Plans conform to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}, also returned by get_media_plan_schema.`,
       inputSchema: { input: z.string().min(1), goals: goalSchema },
       annotations: readOnlyHint,
     },
@@ -107,6 +114,57 @@ export function createMcpServer(): McpServer {
           capabilities: await getCapabilities(),
         }),
       })),
+  );
+  server.registerTool(
+    'validate_plan',
+    {
+      description: `Detect mechanical plan issues (impossible trims, dimension conflicts, out-of-range timestamps, concatenation stream conflicts) against a real source without executing. Plans conform to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}. Read-only.`,
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+      },
+      annotations: readOnlyHint,
+    },
+    async ({ plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        const source = await inspectMedia(plan.source.path);
+        // A concatenation's conflicts live in the other clips, so they have to be inspected too;
+        // otherwise a stream-layout mismatch stays invisible until FFmpeg refuses the join.
+        const concatenationSources = await inspectConcatenationSources(plan, source);
+        return {
+          issues: inspectPlanIssues(plan, source, {
+            ...(concatenationSources === undefined ? {} : { concatenationSources }),
+          }),
+        };
+      }),
+  );
+  server.registerTool(
+    'repair_plan',
+    {
+      description: `Repair mechanical plan issues (clamp trims and timestamps into source duration, reconcile resize with aspect ratio) and return the repaired plan with a structured repair report. Plans conform to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}.`,
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+      },
+      annotations: readOnlyHint,
+    },
+    async ({ plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        const { plan: repaired, repairs } = repairPlan(plan, await inspectMedia(plan.source.path));
+        return { repairs, repairedPlan: repaired };
+      }),
+  );
+  server.registerTool(
+    'get_media_plan_schema',
+    {
+      description: `Return the canonical Media Plan JSON Schema (Media IR v${mediaPlanSchemaVersion}, ${mediaPlanSchemaId}) generated from the runtime models, so agent tooling cannot drift.`,
+      annotations: readOnlyHint,
+    },
+    async () =>
+      safely(async () => {
+        const { mediaPlanJsonSchema } = await import('@hadialmarzooq/agent-media-core');
+        return { $id: mediaPlanSchemaId, schema: mediaPlanJsonSchema };
+      }),
   );
   server.registerTool(
     'make_vertical',
@@ -329,33 +387,79 @@ export function createMcpServer(): McpServer {
   server.registerTool(
     'execute_media_plan',
     {
-      description:
-        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Overwrite is destructive.',
+      description: `Execute a serialized semantic Media IR plan conforming to the canonical Media IR v${mediaPlanSchemaVersion} JSON Schema at ${mediaPlanSchemaId}. Accepts a plan object or JSON string. Overwrite is destructive. Set writeReceipt to emit a durable receipt, or resume to skip execution when a passing receipt already matches the plan and source.`,
       inputSchema: {
         plan: z.union([z.string().min(1), planRefSchema]),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
+        writeReceipt: z.boolean().optional(),
+        resume: z.boolean().optional(),
       },
       annotations: destructiveHint,
     },
-    async ({ plan: input, output, overwrite }, extra) => {
+    async ({ plan: input, output, overwrite, writeReceipt, resume }, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () => {
         const plan = normalizePlan(input);
         const execution = await executePlan(plan, {
           output,
           ...(overwrite === undefined ? {} : { overwrite }),
+          ...(writeReceipt === undefined ? {} : { writeReceipt }),
+          ...(resume === undefined ? {} : { resume }),
           signal: extra.signal,
           onProgress: notifications.notify,
         });
         return {
           output: execution.output,
+          ...(execution.resumed === undefined ? {} : { resumed: execution.resumed }),
+          ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
           verification: verifyMedia(await inspectMedia(execution.output), plan.expectations),
         };
       });
       await notifications.drain();
       return response;
     },
+  );
+  server.registerTool(
+    'resume_execution',
+    {
+      description:
+        'Continue from a saved execution receipt: skip the work when the recorded output still satisfies the same plan against an unchanged source, and re-execute the plan when it does not. Overwrite is destructive.',
+      inputSchema: {
+        receipt: z.string().min(1),
+        output: z.string().min(1).optional(),
+        overwrite: z.boolean().optional(),
+      },
+      annotations: destructiveHint,
+    },
+    async ({ receipt, output, overwrite }, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () => {
+        const execution = await resumeFromReceipt(parseReceipt(receipt), {
+          ...(output === undefined ? {} : { output }),
+          ...(overwrite === undefined ? {} : { overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        });
+        return {
+          output: execution.output,
+          resumed: execution.resumed === true,
+          ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
+        };
+      });
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'inspect_receipt',
+    {
+      description:
+        'Validate and inspect a saved execution receipt (durable record of plan, source fingerprint, output, and verification).',
+      inputSchema: { receipt: z.string().min(1) },
+      annotations: readOnlyHint,
+    },
+    async ({ receipt }) => safely(async () => parseReceipt(receipt)),
   );
   server.registerTool(
     'verify_media',
@@ -394,6 +498,19 @@ async function safely(operation: () => Promise<unknown>) {
           };
     return { ...result(structured), isError: true };
   }
+}
+
+async function inspectConcatenationSources(
+  plan: MediaPlan,
+  source: MediaMetadata,
+): Promise<MediaMetadata[] | undefined> {
+  const concatenate = plan.steps.find((step) => step.operation === 'concatenate');
+  if (concatenate?.operation !== 'concatenate') return undefined;
+  const sources: MediaMetadata[] = [];
+  for (const [index, input] of concatenate.inputs.entries()) {
+    sources.push(index === 0 ? source : await inspectMedia(input));
+  }
+  return sources;
 }
 
 function normalizePlan(input: string | Record<string, unknown>): MediaPlan {

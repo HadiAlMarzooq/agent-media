@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 import { MediaError } from './errors.js';
 
+/** The Media IR version this runtime speaks. Plans declaring anything else are rejected. */
+export const MEDIA_IR_VERSION = '1' as const;
+
 export const aspectRatioSchema = z
   .string()
   .regex(/^[1-9]\d*:[1-9]\d*$/, 'Aspect ratio must use positive width:height values.');
@@ -59,7 +62,7 @@ export const expectationsSchema = z.object({
 /** Version 1 of the portable, semantic media plan. */
 export const mediaPlanSchema = z
   .object({
-    irVersion: z.literal('1'),
+    irVersion: z.literal(MEDIA_IR_VERSION),
     source: z.object({ path: z.string().min(1) }),
     constraints: z.object({
       maxSizeMB: z.number().positive().optional(),
@@ -184,11 +187,33 @@ export function parsePlan(serialized: string): MediaPlan {
 
 /** Validate an unknown value at a public Media IR boundary. */
 export function validatePlan(value: unknown): MediaPlan {
+  assertSupportedVersion(value);
   const parsed = mediaPlanSchema.safeParse(value);
   if (!parsed.success) {
-    throw invalidPlan('Media Plan does not match Media IR version 1.', parsed.error);
+    throw invalidPlan(
+      `Media Plan does not match Media IR version ${MEDIA_IR_VERSION}.`,
+      parsed.error,
+    );
   }
   return parsed.data;
+}
+
+/**
+ * A plan carrying a different IR version is rejected before schema validation, so the caller is
+ * told the runtime speaks a different version rather than reading a list of field-level errors.
+ */
+function assertSupportedVersion(value: unknown): void {
+  if (typeof value !== 'object' || value === null) return;
+  const declared = (value as { irVersion?: unknown }).irVersion;
+  if (declared === undefined || declared === MEDIA_IR_VERSION) return;
+  throw new MediaError({
+    code: 'INVALID_PLAN',
+    message: `Media IR version ${String(declared)} is not supported by this runtime.`,
+    context: { declaredVersion: declared, supportedVersion: MEDIA_IR_VERSION },
+    suggestedActions: [
+      `Re-plan the transformation with a runtime that emits Media IR version ${MEDIA_IR_VERSION}.`,
+    ],
+  });
 }
 
 function invalidPlan(message: string, error: unknown): MediaError {

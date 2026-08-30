@@ -151,8 +151,13 @@ agent-media extract-audio demo.mp4 --output audio.m4a
 agent-media extract-frame demo.mp4 --output frame.jpg --at 2
 agent-media concatenate demo.mp4 --inputs clip2.mp4 clip3.mp4 --output joined.mp4 --progress
 agent-media plan demo.mp4 --aspect 9:16 --max-size 25 --out plan.json
-agent-media execute plan.json --output replay.mp4 --progress
+agent-media validate-plan plan.json
+agent-media repair-plan plan.json --out repaired.json
+agent-media execute plan.json --output replay.mp4 --write-receipt --progress
+agent-media resume replay.mp4.receipt.json
+agent-media receipt replay.mp4.receipt.json
 agent-media verify replay.mp4 --against plan.json
+agent-media schema
 agent-media capabilities
 ```
 
@@ -161,11 +166,14 @@ recovery actions.
 
 ## MCP
 
-Run `agent-media-mcp` over stdio. It exposes eleven semantic tools:
+Run `agent-media-mcp` over stdio. It exposes sixteen semantic tools:
 
 - `inspect_media` (read-only)
 - `get_media_capabilities` (read-only)
 - `plan_media` (read-only)
+- `validate_plan` (read-only)
+- `repair_plan` (read-only)
+- `get_media_plan_schema` (read-only)
 - `make_vertical`
 - `optimize_for_web`
 - `normalize_media`
@@ -173,6 +181,8 @@ Run `agent-media-mcp` over stdio. It exposes eleven semantic tools:
 - `extract_frame`
 - `concatenate_media`
 - `execute_media_plan`
+- `resume_execution`
+- `inspect_receipt` (read-only)
 - `verify_media` (read-only)
 
 Read-only tools are annotated with `readOnlyHint`; writer tools with `destructiveHint` so clients
@@ -182,6 +192,54 @@ like Claude Code can distinguish safe inspections from overwrite-capable calls.
 `execute_media_plan` send standard MCP progress notifications when the client requests progress.
 Plan execution and verification accept either the plan object returned by `plan_media` or serialized
 plan JSON. Tool failures set `isError` and carry the same structured error body as the SDK and CLI.
+
+## Plan repair
+
+Plans arrive from outside the planner — hand-written by an agent, or replayed against a different
+source — and mechanical problems in them should be caught before FFmpeg sees them. `validate_plan`
+reports issues without executing; `repair_plan` fixes the repairable ones and says exactly what it
+changed:
+
+- Trims that start past the source, or end before they start.
+- Frame timestamps beyond the end of the source.
+- Resize dimensions that contradict the reframed aspect ratio.
+- Concatenation inputs that disagree on stream layout. This one is reported, not repaired:
+  reconciling it means re-encoding other files, so the issue carries a ready-to-run normalization
+  plan per conflicting clip instead of a silent fix.
+
+Repairs are never silent. Every change is reported as `{ field, action, from, to }`, and anything
+that cannot be repaired mechanically fails with `INVALID_PLAN` rather than being guessed at.
+
+## Receipts and resumability
+
+Set `writeReceipt` (`--write-receipt`) and an execution leaves a durable, versioned JSON record
+next to its output: the plan, its fingerprint, the source fingerprint, the backend, the executed
+steps, the output, and the full verification report. Failed runs write one too, carrying the error
+code — so a later run can tell "never executed" from "executed and did not satisfy the plan".
+
+`resume_execution` (`agent-media resume`) takes a receipt and continues from it. When the recorded
+output still exists and still satisfies the same plan against an unchanged source, the work is
+skipped and nothing is re-encoded. When the source, the plan, or the output has changed, the plan
+is executed again.
+
+Checkpointing is at plan granularity because a plan compiles to a single FFmpeg invocation: there
+is no intermediate state between steps to resume from, and introducing one would mean writing and
+re-encoding intermediate files on every run.
+
+## Content verification
+
+Metadata verification proves an output is the right shape. It cannot prove there is a picture in
+it. Opt into content checks — on any workflow, or on `executePlan` — and the output is decoded once
+and inspected for what it actually contains:
+
+- `blackFrames` — fully black stretches.
+- `silence` — silent stretches, with a tunable threshold.
+- `freeze` — frozen frames.
+- `completeness` — every expected stream decodes end to end.
+
+Custom checks plug in through `verifyMedia`'s `customChecks` hook, and any check can be listed in
+`warnOnly` to warn without failing the report. A custom check that throws is isolated: it is
+recorded as a warning and never as a silent pass.
 
 ## Reliability evidence
 
