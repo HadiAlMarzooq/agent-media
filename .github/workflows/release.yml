@@ -58,11 +58,11 @@ jobs:
       - name: Create or update GitHub prerelease
         shell: bash
         run: |
-          title="Agent Media ${RELEASE_TAG} — private release candidate"
+          title="Agent Media ${RELEASE_TAG}"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --title "$title" --prerelease
           else
-            gh release create "$RELEASE_TAG" --verify-tag --title "$title" --generate-notes --prerelease
+            gh release create "$RELEASE_TAG" --verify-tag --title "$title" --generate-notes
           fi
           gh release upload "$RELEASE_TAG" --clobber \
             artifacts/release/* \
