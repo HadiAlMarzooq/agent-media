@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Versioned media planning and structured verification primitives for software agents.",
   "keywords": [
     "media",
@@ -32,7 +32,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
