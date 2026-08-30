@@ -1,18 +1,13 @@
 # Workflows
 
-## `makeVertical`
+## High-level workflows
 
-`makeVertical` is the opinionated high-level workflow. It performs the complete contract:
+All five workflows share the same contract: inspect → plan → serialize → execute → verify.
+Each returns `{ source, plan, serializedPlan, output, verification }`.
 
-1. inspect the source;
-2. detect FFmpeg capabilities;
-3. create a 9:16 high-compatibility Media IR plan;
-4. serialize that plan;
-5. execute it;
-6. inspect the output again; and
-7. verify every recorded expectation.
+### `makeVertical`
 
-It returns all semantic artifacts rather than only a path:
+9:16 vertical, H.264/yuv420p, faststart. Defaults to 1080×1920.
 
 ```ts
 const { source, plan, serializedPlan, output, verification } = await makeVertical({
@@ -26,12 +21,61 @@ const { source, plan, serializedPlan, output, verification } = await makeVertica
 });
 ```
 
-This is intentionally a convenience layer over Media IR. The plan can still be persisted and
-replayed with `parsePlan` and `executePlan`; there is no separate workflow compiler.
+### `optimizeForWeb`
+
+Web-optimized: balanced quality, H.264/yuv420p, faststart, optional size ceiling.
+
+```ts
+const result = await optimizeForWeb({
+  input: 'demo.mp4',
+  output: 'web.mp4',
+  maxSizeMB: 10,
+  quality: 'balanced',
+});
+```
+
+### `normalize`
+
+Normalized high-compatibility copy without changing dimensions or aspect ratio.
+
+```ts
+const result = await normalize({
+  input: 'demo.mp4',
+  output: 'normalized.mp4',
+});
+```
+
+### `extractAudio`
+
+Audio extraction from any media source.
+
+```ts
+const result = await extractAudio({
+  input: 'demo.mp4',
+  output: 'audio.m4a',
+  format: 'm4a', // or 'mp3', 'wav'
+});
+```
+
+### `extractFrame`
+
+Still frame extraction from a video source.
+
+```ts
+const result = await extractFrame({
+  input: 'demo.mp4',
+  output: 'frame.jpg',
+  atSeconds: 2,
+  format: 'jpg', // or 'png'
+});
+```
+
+All workflows are convenience layers over Media IR. The plan can still be persisted and replayed
+with `parsePlan` and `executePlan`; there is no separate workflow compiler.
 
 ### Progress
 
-Both `makeVertical` and `executePlan` accept `onProgress`. Events are monotonic and use this shape:
+All workflows and `executePlan` accept `onProgress`. Events are monotonic and use this shape:
 
 ```ts
 interface MediaProgress {

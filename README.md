@@ -6,10 +6,14 @@
 
 <p align="center">
   <strong>Deterministic media workflows for software agents.</strong><br />
-  Inspect intent. Replay plans. Verify outcomes.
+  Inspect intent. Replay plans. Verify outcomes. Zero silent failures.
 </p>
 
-Agent Media turns goals such as “make this vertical, broadly compatible, and under 25 MB” into a
+<p align="center">
+  <img src="examples/demo.gif" alt="Agent Media recovery demo" />
+</p>
+
+Agent Media turns goals such as "make this vertical, broadly compatible, and under 25 MB" into a
 versioned semantic plan. The plan can be inspected before execution, serialized across process
 boundaries, replayed through FFmpeg, and verified against fresh output metadata afterward.
 
@@ -28,14 +32,15 @@ step in a safer contract:
 semantic goal → inspect → versioned Media IR → execute → inspect again → verify
 ```
 
-| Property             | What the agent gets                                                         |
-| -------------------- | --------------------------------------------------------------------------- |
-| Semantic planning    | Goals and reasons instead of raw FFmpeg flags                               |
-| Portable Media IR    | Validated JSON that can be reviewed, persisted, and replayed                |
-| Outcome verification | Structured checks for duration, geometry, size, audio, codec, and pixels    |
-| Structured recovery  | Stable error codes and every failed verification check in one report        |
-| Observable execution | Monotonic progress through SDK callbacks, CLI NDJSON, and MCP notifications |
-| One implementation   | The SDK, JSON CLI, MCP server, and high-level workflows share the same core |
+| Property             | What the agent gets                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Semantic planning    | Goals and reasons instead of raw FFmpeg flags                                        |
+| Portable Media IR    | Validated JSON that can be reviewed, persisted, and replayed                         |
+| Outcome verification | Structured checks for duration, geometry, size, audio, codec, and pixels            |
+| Structured recovery  | Stable error codes and every failed verification check in one report                 |
+| Observable execution | Monotonic progress through SDK callbacks, CLI NDJSON, and MCP notifications           |
+| One implementation   | The SDK, JSON CLI, MCP server, and high-level workflows share the same core           |
+| 5 high-level workflows | `makeVertical`, `optimizeForWeb`, `normalize`, `extractAudio`, `extractFrame`     |
 
 ## Quick start
 
@@ -51,22 +56,39 @@ pnpm build
 Create a verified vertical video with one SDK call:
 
 ```ts
-import { makeVertical } from '@hadialmarzooq/agent-media-ffmpeg';
+import { makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame } from '@hadialmarzooq/agent-media-ffmpeg';
 
-const result = await makeVertical({
+// 9:16 vertical, H.264/yuv420p, faststart, size-constrained
+const vertical = await makeVertical({
   input: 'demo.mp4',
   output: 'vertical.mp4',
   maxSizeMB: 25,
   onProgress: ({ phase, percent }) => console.error(`${phase}: ${percent}%`),
 });
 
-console.log(result.plan); // portable Media IR v1
-console.log(result.verification.passed); // true, or the workflow throws VERIFICATION_FAILED
+// Web-optimized: balanced quality, H.264, faststart
+const web = await optimizeForWeb({
+  input: 'demo.mp4',
+  output: 'web.mp4',
+  maxSizeMB: 10,
+  quality: 'balanced',
+});
+
+// Normalize to high-compat copy without changing dimensions
+const norm = await normalize({ input: 'demo.mp4', output: 'normalized.mp4' });
+
+// Extract audio
+const audio = await extractAudio({ input: 'demo.mp4', output: 'audio.m4a' });
+
+// Extract a still frame
+const frame = await extractFrame({ input: 'demo.mp4', output: 'frame.jpg', atSeconds: 2 });
+
+console.log(vertical.verification.passed); // true, or throws VERIFICATION_FAILED
 ```
 
-`makeVertical` defaults to a 1080×1920, H.264/yuv420p, fast-start compatible output. It still
-returns the inspected source, plan, serialized plan, freshly inspected output, and verification
-report—convenience without hiding the contract.
+Every workflow returns the same `{ source, plan, serializedPlan, output, verification }` structure.
+The plan is inspectable before execution, serializable to portable JSON, and the output is verified
+against the plan's expectations. Convenience without hiding the contract.
 
 ## See the full agent loop
 
@@ -97,6 +119,10 @@ JSON on stderr, so automation never receives mixed output.
 ```bash
 agent-media inspect demo.mp4
 agent-media vertical demo.mp4 --output vertical.mp4 --max-size 25 --progress
+agent-media optimize demo.mp4 --output web.mp4 --max-size 10 --progress
+agent-media normalize demo.mp4 --output normalized.mp4
+agent-media extract-audio demo.mp4 --output audio.m4a
+agent-media extract-frame demo.mp4 --output frame.jpg --at 2
 agent-media plan demo.mp4 --aspect 9:16 --max-size 25 --out plan.json
 agent-media execute plan.json --output replay.mp4 --progress
 agent-media verify replay.mp4 --against plan.json
@@ -108,24 +134,41 @@ recovery actions.
 
 ## MCP
 
-Run `agent-media-mcp` over stdio. It exposes six semantic tools:
+Run `agent-media-mcp` over stdio. It exposes ten semantic tools:
 
 - `inspect_media`
 - `get_media_capabilities`
 - `plan_media`
 - `make_vertical`
+- `optimize_for_web`
+- `normalize_media`
+- `extract_audio`
+- `extract_frame`
 - `execute_media_plan`
 - `verify_media`
 
-`make_vertical` and `execute_media_plan` send standard MCP progress notifications when the client
-requests progress. Plan execution and verification accept either the plan object returned by
-`plan_media` or serialized plan JSON. Tool failures set `isError` and carry the same structured error
-body as the SDK and CLI.
+`make_vertical`, `optimize_for_web`, `normalize_media`, `extract_audio`, `extract_frame`, and
+`execute_media_plan` send standard MCP progress notifications when the client requests progress.
+Plan execution and verification accept either the plan object returned by `plan_media` or serialized
+plan JSON. Tool failures set `isError` and carry the same structured error body as the SDK and CLI.
 
 ## Reliability evidence
 
-The reliability corpus covers a constrained-size transcode, malformed bytes, an audio-only visual
-request, and incompatible concatenation streams:
+The reliability corpus covers 13 scenarios across all workflows and safety guards:
+
+- Size-limited vertical conversion with verification
+- Web optimization with H.264/yuv420p and size constraints
+- Normalize to high-compatibility copy
+- Audio extraction verification
+- Frame extraction verification
+- Trim duration verification
+- Square reframe verification
+- Malformed-file classification with structured recovery
+- Audio-only vertical rejection with structured recovery
+- Incompatible concatenation preflight with structured recovery
+- Compatible concatenation (video-only and audio-only)
+- Output collision rejection
+- Source overwrite rejection
 
 ```bash
 pnpm benchmark:reliability
