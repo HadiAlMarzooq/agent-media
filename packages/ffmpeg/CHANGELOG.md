@@ -1,5 +1,17 @@
 # @hadialmarzooq/agent-media-ffmpeg
 
+## 0.1.0
+
+### Minor Changes
+
+- Initial public release. Five verified workflows (makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame), versioned Media IR v1, structured verification, monotonic progress, 13-scenario reliability corpus, CLI and MCP adapters, automated release pipeline with artifact validation.
+- 0dd4533: Add optimizeForWeb, normalize, extractAudio, and extractFrame verified workflows with CLI commands, MCP tools, expanded 13-scenario reliability corpus, and visual demo GIF.
+
+### Patch Changes
+
+- Updated dependencies
+  - @hadialmarzooq/agent-media-core@0.1.0
+
 ## 0.0.10
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 # Pre-public readiness review
 
-Reviewed: 2026-08-30. This is an internal readiness review only. The repository stays private and
-no package has been published.
+Reviewed: 2026-08-30. Updated for public release v0.1.0. The repository is now public and packages
+are published to npm under `@hadialmarzooq`.
 
 ## Product and API audit
 
@@ -34,7 +34,7 @@ lookup is not a reservation: confirm scope ownership before any publication.
 - MIT licensing, third-party dependency review, security reporting policy, contribution guidance,
   Code of Conduct, Changesets, and release tags are present.
 
-## Remaining owner decision
+## Release status
 
-Do not change repository visibility or publish packages without explicit owner approval. Before
-that approval, reconfirm npm scope ownership and run the full CI matrix on the final commit.
+The repository is public at v0.1.0. All four packages are published to npm with `access: public`.
+The release workflow packs, validates, and attaches artifacts to GitHub releases on every tag.

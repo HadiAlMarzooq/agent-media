@@ -19,7 +19,7 @@ Agent Media is a deterministic media transformation runtime for software agents.
 - Concatenation preflights stream topology and reports incompatible fields as `UNSUPPORTED_INPUT`.
 - `pnpm demo` proves failed verification and structured plan recovery.
 - `pnpm benchmark:reliability` emits a 13-scenario cross-platform semantic evidence report.
-- The repository is a private release candidate; packages are not published to npm.
+- The repository is public. Install with npm: `@hadialmarzooq/agent-media-core`, `@hadialmarzooq/agent-media-ffmpeg`, `@hadialmarzooq/agent-media-cli`, `@hadialmarzooq/agent-media-mcp`.
 
 Read `README.md`, `docs/README.md`, `docs/api.md`, `docs/errors.md`, `ARCHITECTURE.md`, and
 `ROADMAP.md` first.

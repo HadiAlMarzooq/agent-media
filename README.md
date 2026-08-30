@@ -10,6 +10,15 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@hadialmarzooq/agent-media-core"><img src="https://img.shields.io/npm/v/@hadialmarzooq/agent-media-core?label=core" alt="core npm version" /></a>
+  <a href="https://www.npmjs.com/package/@hadialmarzooq/agent-media-ffmpeg"><img src="https://img.shields.io/npm/v/@hadialmarzooq/agent-media-ffmpeg?label=ffmpeg" alt="ffmpeg npm version" /></a>
+  <a href="https://www.npmjs.com/package/@hadialmarzooq/agent-media-cli"><img src="https://img.shields.io/npm/v/@hadialmarzooq/agent-media-cli?label=cli" alt="cli npm version" /></a>
+  <a href="https://www.npmjs.com/package/@hadialmarzooq/agent-media-mcp"><img src="https://img.shields.io/npm/v/@hadialmarzooq/agent-media-mcp?label=mcp" alt="mcp npm version" /></a>
+  <a href="https://github.com/HadiAlMarzooq/agent-media/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/HadiAlMarzooq/agent-media/ci.yml?label=CI" alt="CI status" /></a>
+  <a href="https://github.com/HadiAlMarzooq/agent-media/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@hadialmarzooq/agent-media-core" alt="MIT license" /></a>
+</p>
+
+<p align="center">
   <img src="examples/demo.gif" alt="Agent Media recovery demo" />
 </p>
 
@@ -19,9 +28,17 @@ boundaries, replayed through FFmpeg, and verified against fresh output metadata 
 
 FFmpeg is the first backend. It is deliberately not the agent-facing abstraction.
 
-> [!IMPORTANT]
-> The repository is a private release candidate. Packages are not published to npm yet; install from
-> source or use the tarballs attached to a GitHub prerelease.
+## Install
+
+```bash
+npm install @hadialmarzooq/agent-media-core @hadialmarzooq/agent-media-ffmpeg
+# CLI
+npm install -g @hadialmarzooq/agent-media-cli
+# MCP server
+npm install @hadialmarzooq/agent-media-mcp
+```
+
+Prerequisites: Node.js 22+, `ffmpeg` and `ffprobe` on `PATH`.
 
 ## Why Agent Media
 
@@ -44,13 +61,8 @@ semantic goal → inspect → versioned Media IR → execute → inspect again �
 
 ## Quick start
 
-Prerequisites: Node.js 22+, pnpm 10, `ffmpeg`, and `ffprobe` on `PATH`.
-
 ```bash
-git clone https://github.com/HadiAlMarzooq/agent-media.git
-cd agent-media
-pnpm install --frozen-lockfile
-pnpm build
+npm install @hadialmarzooq/agent-media-core @hadialmarzooq/agent-media-ffmpeg
 ```
 
 Create a verified vertical video with one SDK call:
