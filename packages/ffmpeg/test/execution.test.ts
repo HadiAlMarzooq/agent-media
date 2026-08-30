@@ -5,7 +5,15 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
 
-import { executePlan, inspectMedia, makeVertical } from '../src/index.js';
+import {
+  executePlan,
+  inspectMedia,
+  makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
+} from '../src/index.js';
 import type { MediaProgress } from '../src/index.js';
 import { runProcess } from '../src/process.js';
 
@@ -297,5 +305,63 @@ describe('execution', () => {
       expect.arrayContaining(['inspecting', 'planning', 'executing', 'verifying', 'completed']),
     );
     expect(progress.at(-1)).toMatchObject({ phase: 'completed', percent: 100 });
+  });
+
+  it('runs the optimizeForWeb inspect-plan-execute-verify workflow', async () => {
+    const output = join(directory, 'web-optimized.mp4');
+    const progress: MediaProgress[] = [];
+    const result = await optimizeForWeb({
+      input: fixture,
+      output,
+      durationSeconds: 1,
+      maxSizeMB: 0.15,
+      onProgress: (event) => progress.push(event),
+    });
+
+    expect(parsePlan(result.serializedPlan)).toEqual(result.plan);
+    expect(result.output).toMatchObject({
+      kind: 'video',
+      video: { codec: 'h264', pixelFormat: 'yuv420p' },
+    });
+    expect(result.verification).toMatchObject({ passed: true });
+    expect(progress.at(-1)).toMatchObject({ phase: 'completed', percent: 100 });
+  });
+
+  it('runs the normalize inspect-plan-execute-verify workflow', async () => {
+    const output = join(directory, 'normalized.mp4');
+    const result = await normalize({
+      input: fixture,
+      output,
+      durationSeconds: 1,
+    });
+
+    expect(result.output).toMatchObject({
+      kind: 'video',
+      video: { codec: 'h264', pixelFormat: 'yuv420p' },
+    });
+    expect(result.verification).toMatchObject({ passed: true });
+  });
+
+  it('runs the extractAudio inspect-plan-execute-verify workflow', async () => {
+    const output = join(directory, 'extracted-audio.m4a');
+    const result = await extractAudio({
+      input: fixture,
+      output,
+    });
+
+    expect(result.output).toMatchObject({ kind: 'audio', audio: { present: true } });
+    expect(result.verification).toMatchObject({ passed: true });
+  });
+
+  it('runs the extractFrame inspect-plan-execute-verify workflow', async () => {
+    const output = join(directory, 'extracted-frame.jpg');
+    const result = await extractFrame({
+      input: fixture,
+      output,
+      atSeconds: 0.5,
+    });
+
+    expect(result.output).toMatchObject({ kind: 'image' });
+    expect(result.verification).toMatchObject({ passed: true });
   });
 });

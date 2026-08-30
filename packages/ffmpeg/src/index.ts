@@ -6,5 +6,19 @@ export type { ExecuteOptions, ExecutionResult } from './executor.js';
 export { inspectMedia } from './inspect.js';
 export type { FfmpegOptions } from './inspect.js';
 export type { MediaProgress, MediaProgressPhase, ProgressCallback } from './progress.js';
-export { makeVertical } from './workflows.js';
-export type { MakeVerticalOptions, MakeVerticalResult } from './workflows.js';
+export {
+  makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
+} from './workflows.js';
+export type {
+  WorkflowOptions,
+  MakeVerticalOptions,
+  OptimizeForWebOptions,
+  NormalizeOptions,
+  ExtractAudioOptions,
+  ExtractFrameOptions,
+  WorkflowResult,
+} from './workflows.js';

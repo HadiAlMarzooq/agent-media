@@ -6,7 +6,8 @@ Agent Media deliberately separates semantic planning from its FFmpeg backend. Th
 inspectMedia → planMedia → serializePlan/parsePlan → executePlan → inspectMedia → verifyMedia
 ```
 
-For the opinionated 9:16 use case, `makeVertical` composes that same path without bypassing Media IR.
+For the opinionated use cases, five high-level workflows compose that same path without bypassing
+Media IR: `makeVertical`, `optimizeForWeb`, `normalize`, `extractAudio`, `extractFrame`.
 
 ## Core package
 
@@ -175,31 +176,80 @@ interface MediaProgress {
 }
 ```
 
-`executePlan` emits the `executing` phase. `makeVertical` emits the full workflow. Percentages are
-monotonic, and completion is exactly 100. Intermediate timing fields are optional.
+`executePlan` emits the `executing` phase. All five workflows emit the full lifecycle. Percentages
+are monotonic, and completion is exactly 100. Intermediate timing fields are optional.
 
-### `makeVertical(options)`
+### High-level workflows
+
+All five workflows share `WorkflowOptions` (input, output, overwrite, allowedOutputDirectory,
+signal, onProgress) and return `{ source, plan, serializedPlan, output, verification }`.
+
+#### `makeVertical(options)`
+
+9:16 vertical, H.264/yuv420p, faststart. Defaults to 1080×1920. Custom dimensions must be supplied
+together and match 9:16.
 
 ```ts
-interface MakeVerticalOptions extends FfmpegOptions {
-  input: string;
-  output: string;
+interface MakeVerticalOptions extends WorkflowOptions {
   width?: number; // default 1080
   height?: number; // default 1920
   trimStartSeconds?: number;
   durationSeconds?: number;
   maxSizeMB?: number;
   audio?: 'preserve' | 'remove';
-  overwrite?: boolean;
-  allowedOutputDirectory?: string;
-  signal?: AbortSignal;
-  onProgress?: ProgressCallback;
 }
 ```
 
-It returns `{ source, plan, serializedPlan, output, verification }`. It always requests 9:16 and high
-compatibility. Custom dimensions must be supplied together and match 9:16. When no `audio` option is
-given, source audio is preserved if present. A failed final report becomes `VERIFICATION_FAILED`.
+#### `optimizeForWeb(options)`
+
+Web-optimized: balanced quality, H.264/yuv420p, faststart, optional size ceiling.
+
+```ts
+interface OptimizeForWebOptions extends WorkflowOptions {
+  trimStartSeconds?: number;
+  durationSeconds?: number;
+  maxSizeMB?: number;
+  audio?: 'preserve' | 'remove';
+  quality?: 'high' | 'balanced' | 'small';
+}
+```
+
+#### `normalize(options)`
+
+Normalized high-compatibility copy without changing dimensions or aspect ratio.
+
+```ts
+interface NormalizeOptions extends WorkflowOptions {
+  trimStartSeconds?: number;
+  durationSeconds?: number;
+  audio?: 'preserve' | 'remove';
+}
+```
+
+#### `extractAudio(options)`
+
+Audio extraction from any media source.
+
+```ts
+interface ExtractAudioOptions extends WorkflowOptions {
+  format?: 'm4a' | 'mp3' | 'wav';
+  trimStartSeconds?: number;
+  durationSeconds?: number;
+}
+```
+
+#### `extractFrame(options)`
+
+Still frame extraction from a video source.
+
+```ts
+interface ExtractFrameOptions extends WorkflowOptions {
+  atSeconds?: number;
+  format?: 'jpg' | 'png';
+}
+```
+
+A failed final report in any workflow becomes `VERIFICATION_FAILED`.
 
 ## Complete TypeScript pipeline
 
@@ -232,17 +282,21 @@ const verification = verifyMedia(output, replayed.expectations);
 
 ## CLI reference
 
-| Command                     | Purpose                                   |
-| --------------------------- | ----------------------------------------- |
-| `inspect <input>`           | normalized metadata                       |
-| `capabilities`              | installed FFmpeg features                 |
-| `plan <input> [goals]`      | create Media IR; optionally write `--out` |
-| `vertical <input> --output` | complete high-level vertical workflow     |
-| `execute <plan> --output`   | replay persisted Media IR                 |
-| `verify <output> --against` | verify media against persisted Media IR   |
+| Command                          | Purpose                                   |
+| -------------------------------- | ----------------------------------------- |
+| `inspect <input>`                | normalized metadata                       |
+| `capabilities`                   | installed FFmpeg features                 |
+| `plan <input> [goals]`           | create Media IR; optionally write `--out` |
+| `vertical <input> --output`      | complete high-level vertical workflow     |
+| `optimize <input> --output`      | complete web optimization workflow        |
+| `normalize <input> --output`     | complete normalization workflow           |
+| `extract-audio <input> --output` | complete audio extraction workflow        |
+| `extract-frame <input> --output` | complete frame extraction workflow        |
+| `execute <plan> --output`        | replay persisted Media IR                 |
+| `verify <output> --against`      | verify media against persisted Media IR   |
 
-`vertical` and `execute` accept `--progress`. Successful result JSON is stdout; progress NDJSON and
-structured failures are stderr.
+`vertical`, `optimize`, `normalize`, `extract-audio`, `extract-frame`, and `execute` accept
+`--progress`. Successful result JSON is stdout; progress NDJSON and structured failures are stderr.
 
 ## MCP reference
 
@@ -252,6 +306,10 @@ structured failures are stderr.
 | `get_media_capabilities` | none                                                 |
 | `plan_media`             | `input`, semantic `goals`                            |
 | `make_vertical`          | input/output, geometry, trim, size, audio, overwrite |
+| `optimize_for_web`       | input/output, trim, size, quality, audio, overwrite  |
+| `normalize_media`        | input/output, trim, audio, overwrite                 |
+| `extract_audio`          | input/output, format, trim, overwrite                |
+| `extract_frame`          | input/output, timestamp, format, overwrite           |
 | `execute_media_plan`     | plan object or JSON, output, overwrite               |
 | `verify_media`           | output, plan object or JSON                          |
 

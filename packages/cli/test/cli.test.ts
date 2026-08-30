@@ -49,6 +49,10 @@ describe('CLI', () => {
       'capabilities',
       'plan',
       'vertical',
+      'optimize',
+      'normalize',
+      'extract-audio',
+      'extract-frame',
       'execute',
       'verify',
     ]);

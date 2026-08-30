@@ -6,12 +6,16 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import process from 'node:process';
 
-import { MediaError, planMedia } from '../packages/core/dist/index.js';
+import { MediaError, planMedia, verifyMedia } from '../packages/core/dist/index.js';
 import {
   executePlan,
   getCapabilities,
   inspectMedia,
   makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
 } from '../packages/ffmpeg/dist/index.js';
 
 const workspace = await mkdtemp(join(tmpdir(), 'agent-media-reliability-'));
@@ -124,9 +128,122 @@ try {
     return { errorCode: error.code, incompatibleFields: fields };
   });
 
+  await benchmark('trim-duration-verification', async () => {
+    const target = join(workspace, 'trimmed.mp4');
+    const plan = planMedia({
+      source: await inspectMedia(source),
+      goals: { trimStartSeconds: 0, durationSeconds: 1, compatibility: 'high' },
+    });
+    await executePlan(plan, { output: target, sourceMetadata: await inspectMedia(source) });
+    const output = await inspectMedia(target);
+    const verification = verifyMedia(output, plan.expectations);
+    if (!verification.passed) throw new Error('Trim duration verification failed.');
+    return { durationSeconds: output.durationSeconds, expected: 1 };
+  });
+
+  await benchmark('square-reframe-verification', async () => {
+    const target = join(workspace, 'square.mp4');
+    const plan = planMedia({
+      source: await inspectMedia(source),
+      goals: { aspectRatio: '1:1', width: 180, height: 180, compatibility: 'high' },
+    });
+    await executePlan(plan, { output: target, sourceMetadata: await inspectMedia(source) });
+    const output = await inspectMedia(target);
+    const verification = verifyMedia(output, plan.expectations);
+    if (!verification.passed) throw new Error('Square reframe verification failed.');
+    return {
+      aspectRatio: output.video?.aspectRatio,
+      dimensions: `${output.video?.width}x${output.video?.height}`,
+    };
+  });
+
+  await benchmark('audio-extraction-verification', async () => {
+    const target = join(workspace, 'extracted.m4a');
+    const result = await extractAudio({ input: source, output: target });
+    if (!result.verification.passed) throw new Error('Audio extraction verification failed.');
+    return { kind: result.output.kind, audioPresent: result.output.audio.present };
+  });
+
+  await benchmark('frame-extraction-verification', async () => {
+    const target = join(workspace, 'frame.jpg');
+    const result = await extractFrame({ input: source, output: target, atSeconds: 0.5 });
+    if (!result.verification.passed) throw new Error('Frame extraction verification failed.');
+    return {
+      kind: result.output.kind,
+      dimensions: `${result.output.video?.width}x${result.output.video?.height}`,
+    };
+  });
+
+  await benchmark('web-optimization-verification', async () => {
+    const target = join(workspace, 'web-optimized.mp4');
+    const result = await optimizeForWeb({
+      input: source,
+      output: target,
+      durationSeconds: 1,
+      maxSizeMB: 0.15,
+    });
+    if (!result.verification.passed) throw new Error('Web optimization verification failed.');
+    return {
+      videoCodec: result.output.video?.codec,
+      pixelFormat: result.output.video?.pixelFormat,
+      sizeBytes: result.output.sizeBytes,
+    };
+  });
+
+  await benchmark('normalize-verification', async () => {
+    const target = join(workspace, 'normalized.mp4');
+    const result = await normalize({ input: source, output: target, durationSeconds: 1 });
+    if (!result.verification.passed) throw new Error('Normalize verification failed.');
+    return {
+      videoCodec: result.output.video?.codec,
+      pixelFormat: result.output.video?.pixelFormat,
+    };
+  });
+
+  await benchmark('output-collision-rejection', async () => {
+    const target = join(workspace, 'collision.mp4');
+    await makeVertical({
+      input: source,
+      output: target,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+    });
+    const error = await expectedMediaError(() =>
+      makeVertical({ input: source, output: target, width: 180, height: 320, durationSeconds: 1 }),
+    );
+    if (error.code !== 'OUTPUT_EXISTS') throw error;
+    return { errorCode: error.code, structuredRecovery: Boolean(error.suggestedActions?.length) };
+  });
+
+  await benchmark('source-overwrite-rejection', async () => {
+    const metadata = await inspectMedia(source);
+    const plan = planMedia({ source: metadata, goals: { compatibility: 'high' } });
+    const error = await expectedMediaError(() =>
+      executePlan(plan, { output: source, sourceMetadata: metadata }),
+    );
+    if (error.code !== 'PATH_NOT_ALLOWED') throw error;
+    return { errorCode: error.code, structuredRecovery: Boolean(error.suggestedActions?.length) };
+  });
+
+  await benchmark('compatible-concatenation', async () => {
+    const target = join(workspace, 'compatible-join.mp4');
+    const metadata = await inspectMedia(source);
+    const plan = planMedia({ source: metadata, goals: { concatenate: [source] } });
+    await executePlan(plan, { output: target, sourceMetadata: metadata });
+    const output = await inspectMedia(target);
+    if (output.durationSeconds === undefined || output.durationSeconds < 3.5) {
+      throw new Error('Concatenation did not produce a longer output.');
+    }
+    return { durationSeconds: output.durationSeconds, kind: output.kind };
+  });
+
   const capabilities = await getCapabilities();
   const semanticResults = Object.fromEntries(
-    cases.map(({ id, passed, evidence }) => [id, { passed, evidence }]),
+    cases.map(({ id, passed, evidence }) => [
+      id,
+      { passed, signature: semanticSignature(evidence) },
+    ]),
   );
   const semanticFingerprint = createHash('sha256')
     .update(JSON.stringify(semanticResults))
@@ -208,4 +325,15 @@ function argument(name) {
 
 function rounded(value) {
   return Math.round(value * 100) / 100;
+}
+
+function semanticSignature(evidence) {
+  if (evidence === null || typeof evidence !== 'object') return evidence;
+  const stable = {};
+  for (const [key, value] of Object.entries(evidence)) {
+    if (key === 'durationSeconds' || key === 'sizeBytes' || key === 'durationMs') continue;
+    if (key === 'observedBytes' || key === 'previousLimitBytes') continue;
+    stable[key] = value;
+  }
+  return stable;
 }

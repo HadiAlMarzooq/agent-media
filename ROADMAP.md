@@ -15,6 +15,7 @@ owner explicitly approves publication.
 | 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Complete |
 | 8     | Evidence-driven release hardening                  | 7            | Public-boundary dogfood and verified plan integrity                         | Complete |
 | 9     | Standout release evidence                          | 8            | Recovery demo, corpus parity, vertical workflow, progress, docs, artifacts  | Complete |
+| 10    | Standout polish                                    | 9            | All 5 workflows, 13-scenario corpus, visual demo GIF, expanded docs         | Complete |
 
 ## Phase tasks
 
@@ -88,6 +89,13 @@ owner explicitly approves publication.
 - [x] Demonstrate failed verification followed by plan serialization, replay, and structured recovery.
 - [x] Replace placeholder documentation with task-focused guides and an original pixel-art identity.
 - [x] Produce installable, validated GitHub release artifacts through an automated release workflow.
+
+### Phase 10
+
+- [x] Add `optimizeForWeb`, `normalize`, `extractAudio`, and `extractFrame` verified workflows.
+- [x] Expand reliability corpus to 13 scenarios covering all workflows and safety guards.
+- [x] Create a visual terminal demo GIF of the structured recovery flow.
+- [x] Update README, docs, CLI, and MCP with all five high-level workflows.
 
 Detailed private evidence and competitor tracking remain outside version control. Public release is
 still an explicit owner decision, not an automatic consequence of completing these engineering gates.

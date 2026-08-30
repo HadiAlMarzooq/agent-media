@@ -17,6 +17,10 @@ import {
   getCapabilities,
   inspectMedia,
   makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
 } from '@hadialmarzooq/agent-media-ffmpeg';
 import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 
@@ -94,6 +98,100 @@ export function createProgram(): Command {
           durationSeconds: options.duration,
           maxSizeMB: options.maxSize,
           ...(options.removeAudio ? { audio: 'remove' } : {}),
+          overwrite: options.overwrite,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }),
+      );
+    });
+  program
+    .command('optimize <input>')
+    .description('Create and verify a web-optimized high-compatibility video.')
+    .requiredOption('--output <path>', 'output media path')
+    .option('--trim-start <seconds>', 'trim start in seconds', Number)
+    .option('--duration <seconds>', 'output duration in seconds', Number)
+    .option('--max-size <mb>', 'maximum file size in MB', Number)
+    .option('--quality <level>', 'high, balanced, or small')
+    .option('--remove-audio', 'remove audio')
+    .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
+    .action(async (input, options) => {
+      const onProgress = progressWriter(Boolean(options.progress));
+      print(
+        await optimizeForWeb({
+          input,
+          output: options.output,
+          trimStartSeconds: options.trimStart,
+          durationSeconds: options.duration,
+          maxSizeMB: options.maxSize,
+          ...(options.quality === undefined ? {} : { quality: options.quality }),
+          ...(options.removeAudio ? { audio: 'remove' } : {}),
+          overwrite: options.overwrite,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }),
+      );
+    });
+  program
+    .command('normalize <input>')
+    .description('Create and verify a normalized high-compatibility copy.')
+    .requiredOption('--output <path>', 'output media path')
+    .option('--trim-start <seconds>', 'trim start in seconds', Number)
+    .option('--duration <seconds>', 'output duration in seconds', Number)
+    .option('--remove-audio', 'remove audio')
+    .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
+    .action(async (input, options) => {
+      const onProgress = progressWriter(Boolean(options.progress));
+      print(
+        await normalize({
+          input,
+          output: options.output,
+          trimStartSeconds: options.trimStart,
+          durationSeconds: options.duration,
+          ...(options.removeAudio ? { audio: 'remove' } : {}),
+          overwrite: options.overwrite,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }),
+      );
+    });
+  program
+    .command('extract-audio <input>')
+    .description('Extract and verify audio from any media source.')
+    .requiredOption('--output <path>', 'output audio path')
+    .option('--format <format>', 'm4a, mp3, or wav')
+    .option('--trim-start <seconds>', 'trim start in seconds', Number)
+    .option('--duration <seconds>', 'output duration in seconds', Number)
+    .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
+    .action(async (input, options) => {
+      const onProgress = progressWriter(Boolean(options.progress));
+      print(
+        await extractAudio({
+          input,
+          output: options.output,
+          ...(options.format === undefined ? {} : { format: options.format }),
+          trimStartSeconds: options.trimStart,
+          durationSeconds: options.duration,
+          overwrite: options.overwrite,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }),
+      );
+    });
+  program
+    .command('extract-frame <input>')
+    .description('Extract and verify a still frame from a video source.')
+    .requiredOption('--output <path>', 'output frame path')
+    .option('--at <seconds>', 'frame timestamp in seconds', Number)
+    .option('--format <format>', 'jpg or png')
+    .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
+    .action(async (input, options) => {
+      const onProgress = progressWriter(Boolean(options.progress));
+      print(
+        await extractFrame({
+          input,
+          output: options.output,
+          ...(options.at === undefined ? {} : { atSeconds: options.at }),
+          ...(options.format === undefined ? {} : { format: options.format }),
           overwrite: options.overwrite,
           ...(onProgress === undefined ? {} : { onProgress }),
         }),

@@ -19,6 +19,10 @@ import {
   getCapabilities,
   inspectMedia,
   makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
 } from '@hadialmarzooq/agent-media-ffmpeg';
 import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
@@ -101,6 +105,148 @@ export function createMcpServer(): McpServer {
             : { durationSeconds: options.durationSeconds }),
           ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
           ...(options.audio === undefined ? {} : { audio: options.audio }),
+          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        }),
+      );
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'optimize_for_web',
+    {
+      description:
+        'Inspect, plan, execute, and verify a web-optimized high-compatibility video. Reports MCP progress when requested.',
+      inputSchema: {
+        input: z.string().min(1),
+        output: z.string().min(1),
+        trimStartSeconds: z.number().nonnegative().optional(),
+        durationSeconds: z.number().positive().optional(),
+        maxSizeMB: z.number().positive().optional(),
+        quality: z.enum(['high', 'balanced', 'small']).optional(),
+        audio: z.enum(['preserve', 'remove']).optional(),
+        overwrite: z.boolean().optional(),
+      },
+    },
+    async (options, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () =>
+        optimizeForWeb({
+          input: options.input,
+          output: options.output,
+          ...(options.trimStartSeconds === undefined
+            ? {}
+            : { trimStartSeconds: options.trimStartSeconds }),
+          ...(options.durationSeconds === undefined
+            ? {}
+            : { durationSeconds: options.durationSeconds }),
+          ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
+          ...(options.quality === undefined ? {} : { quality: options.quality }),
+          ...(options.audio === undefined ? {} : { audio: options.audio }),
+          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        }),
+      );
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'normalize_media',
+    {
+      description:
+        'Inspect, plan, execute, and verify a normalized high-compatibility copy (H.264, yuv420p, faststart). Reports MCP progress when requested.',
+      inputSchema: {
+        input: z.string().min(1),
+        output: z.string().min(1),
+        trimStartSeconds: z.number().nonnegative().optional(),
+        durationSeconds: z.number().positive().optional(),
+        audio: z.enum(['preserve', 'remove']).optional(),
+        overwrite: z.boolean().optional(),
+      },
+    },
+    async (options, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () =>
+        normalize({
+          input: options.input,
+          output: options.output,
+          ...(options.trimStartSeconds === undefined
+            ? {}
+            : { trimStartSeconds: options.trimStartSeconds }),
+          ...(options.durationSeconds === undefined
+            ? {}
+            : { durationSeconds: options.durationSeconds }),
+          ...(options.audio === undefined ? {} : { audio: options.audio }),
+          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        }),
+      );
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'extract_audio',
+    {
+      description:
+        'Extract and verify audio from any media source. Reports MCP progress when requested.',
+      inputSchema: {
+        input: z.string().min(1),
+        output: z.string().min(1),
+        format: z.enum(['m4a', 'mp3', 'wav']).optional(),
+        trimStartSeconds: z.number().nonnegative().optional(),
+        durationSeconds: z.number().positive().optional(),
+        overwrite: z.boolean().optional(),
+      },
+    },
+    async (options, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () =>
+        extractAudio({
+          input: options.input,
+          output: options.output,
+          ...(options.format === undefined ? {} : { format: options.format }),
+          ...(options.trimStartSeconds === undefined
+            ? {}
+            : { trimStartSeconds: options.trimStartSeconds }),
+          ...(options.durationSeconds === undefined
+            ? {}
+            : { durationSeconds: options.durationSeconds }),
+          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        }),
+      );
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'extract_frame',
+    {
+      description:
+        'Extract and verify a still frame from a video source. Reports MCP progress when requested.',
+      inputSchema: {
+        input: z.string().min(1),
+        output: z.string().min(1),
+        atSeconds: z.number().nonnegative().optional(),
+        format: z.enum(['jpg', 'png']).optional(),
+        overwrite: z.boolean().optional(),
+      },
+    },
+    async (options, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () =>
+        extractFrame({
+          input: options.input,
+          output: options.output,
+          ...(options.atSeconds === undefined ? {} : { atSeconds: options.atSeconds }),
+          ...(options.format === undefined ? {} : { format: options.format }),
           ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
           signal: extra.signal,
           onProgress: notifications.notify,
