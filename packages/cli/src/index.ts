@@ -21,6 +21,7 @@ import {
   normalize,
   extractAudio,
   extractFrame,
+  concatenate,
 } from '@hadialmarzooq/agent-media-ffmpeg';
 import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 
@@ -192,6 +193,25 @@ export function createProgram(): Command {
           output: options.output,
           ...(options.at === undefined ? {} : { atSeconds: options.at }),
           ...(options.format === undefined ? {} : { format: options.format }),
+          overwrite: options.overwrite,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }),
+      );
+    });
+  program
+    .command('concatenate <input>')
+    .description('Concatenate multiple media sources into a single verified output.')
+    .requiredOption('--inputs <paths...>', 'additional input paths to concatenate')
+    .requiredOption('--output <path>', 'output media path')
+    .option('--overwrite', 'allow output replacement')
+    .option('--progress', 'write NDJSON progress events to stderr')
+    .action(async (input, options) => {
+      const onProgress = progressWriter(Boolean(options.progress));
+      print(
+        await concatenate({
+          input,
+          inputs: options.inputs,
+          output: options.output,
           overwrite: options.overwrite,
           ...(onProgress === undefined ? {} : { onProgress }),
         }),

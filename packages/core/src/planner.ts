@@ -90,6 +90,10 @@ export function planMedia(request: PlanRequest): MediaPlan {
       format: goals.extractFrame.format ?? 'jpg',
       reason: 'The caller requested a still frame from the source.',
     });
+    if (source.video !== undefined) {
+      expectations.width = source.video.width;
+      expectations.height = source.video.height;
+    }
   } else if (goals.concatenate !== undefined) {
     steps.push({
       id: `concatenate-${steps.length + 1}`,
@@ -97,6 +101,10 @@ export function planMedia(request: PlanRequest): MediaPlan {
       inputs: [source.path, ...goals.concatenate],
       reason: 'The caller requested multiple media sources joined in sequence.',
     });
+    if (source.durationSeconds !== undefined) {
+      expectations.durationSeconds = source.durationSeconds * (goals.concatenate.length + 1);
+    }
+    expectations.audio = source.audio.present ? 'preserve' : 'remove';
   } else if (requiresEncoding(goals)) {
     assertCodecCapability(request.capabilities, goals, source);
     steps.push({
@@ -127,6 +135,9 @@ export function planMedia(request: PlanRequest): MediaPlan {
 function validateGoals({ source, goals }: PlanRequest): void {
   if (source.kind === 'unknown')
     fail('The source has no usable audio or video stream.', { source: source.path });
+  const hasAnyGoal = Object.values(goals).some((v) => v !== undefined);
+  if (!hasAnyGoal)
+    fail('At least one goal must be provided. An empty goals object produces a no-op plan.');
   if (goals.trimStartSeconds !== undefined && goals.trimStartSeconds < 0)
     fail('Trim start must be non-negative.');
   if (goals.trimStartSeconds !== undefined && !Number.isFinite(goals.trimStartSeconds))
@@ -200,6 +211,19 @@ function validateGoals({ source, goals }: PlanRequest): void {
       goals.extractFrame !== undefined)
   )
     fail('The requested visual operation requires a video stream.', { source: source.path });
+  if (
+    source.kind === 'image' &&
+    (goals.aspectRatio !== undefined ||
+      goals.width !== undefined ||
+      goals.height !== undefined ||
+      goals.compatibility !== undefined ||
+      goals.quality !== undefined ||
+      goals.maxSizeMB !== undefined)
+  )
+    fail('Still images cannot be transformed by Media IR v1. Provide a video source.', {
+      source: source.path,
+      kind: source.kind,
+    });
   if (goals.extractAudio !== undefined && !source.audio.present)
     fail('Audio extraction requires an audio stream.', { source: source.path });
   if (goals.audio === 'preserve' && !source.audio.present)
@@ -208,6 +232,16 @@ function validateGoals({ source, goals }: PlanRequest): void {
     });
   if (goals.extractAudio !== undefined && goals.extractFrame !== undefined)
     fail('Audio extraction and frame extraction cannot produce the same output.');
+  if (
+    goals.extractFrame !== undefined &&
+    goals.extractFrame.atSeconds !== undefined &&
+    source.durationSeconds !== undefined &&
+    goals.extractFrame.atSeconds >= source.durationSeconds
+  )
+    fail('Frame extraction timestamp must be before the end of the source.', {
+      requestedAt: goals.extractFrame.atSeconds,
+      sourceDuration: source.durationSeconds,
+    });
   if (goals.concatenate !== undefined && goals.concatenate.length === 0)
     fail('Concatenation requires at least one additional input.');
   const terminalGoal =

@@ -98,7 +98,11 @@ export function verifyMedia(
   const failures = Object.entries(checks)
     .filter(([, result]) => !result.passed)
     .map(([name, result]) => `${name}: ${result.message}`);
-  return { passed: failures.length === 0, checks, failures };
+  const passed = failures.length === 0 && Object.keys(checks).length > 0;
+  if (Object.keys(checks).length === 0) {
+    failures.push('unverifiable: The plan recorded no expectations to verify against.');
+  }
+  return { passed, checks, failures };
 }
 
 function check(

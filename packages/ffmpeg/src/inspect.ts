@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import { MediaError } from '@hadialmarzooq/agent-media-core';
 import type {
@@ -46,7 +46,7 @@ export async function inspectMedia(
   } catch {
     throw new MediaError({
       code: 'UNSUPPORTED_INPUT',
-      message: `The input file does not exist: ${basename(input)}.`,
+      message: `The input file does not exist: ${path}.`,
       context: { input: path },
       suggestedActions: ['Check the source path and permissions.'],
     });
