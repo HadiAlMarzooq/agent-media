@@ -11,6 +11,9 @@ Core package for [Agent Media](https://github.com/HadiAlMarzooq/agent-media) —
 - **verifyMedia()** — structured verification of output metadata against plan expectations
 - **serializePlan() / parsePlan()** — portable JSON serialization with full validation at every boundary
 - **MediaError** — stable, machine-readable error codes with context and recovery suggestions
+- **inspectPlanIssues() / repairPlan()** — detect and mechanically repair stale plans, reporting every change
+- **buildReceipt() / parseReceipt()** — durable, versioned records of an execution and its verification
+- **Media IR JSON Schema** — generated from the Zod models, also shipped as the `./schema.json` export
 
 ## Install
 
@@ -44,6 +47,7 @@ Plans are inspectable before execution, serializable across process boundaries, 
 
 ## Documentation
 
+- [Usage guide](https://github.com/HadiAlMarzooq/agent-media/blob/main/docs/usage.md)
 - [Full docs](https://github.com/HadiAlMarzooq/agent-media/tree/main/docs)
 - [API reference](https://github.com/HadiAlMarzooq/agent-media/blob/main/docs/api.md)
 - [Errors and recovery](https://github.com/HadiAlMarzooq/agent-media/blob/main/docs/errors.md)
