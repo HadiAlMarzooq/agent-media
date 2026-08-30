@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -13,6 +13,7 @@ import { createMcpServer } from '../src/index.js';
 const execFileAsync = promisify(execFile);
 let directory = '';
 let fixture = '';
+let longFixture = '';
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'agent-media-mcp-'));
@@ -37,6 +38,28 @@ beforeAll(async () => {
     '-c:a',
     'aac',
     fixture,
+  ]);
+  longFixture = join(directory, 'fixture-3s.mp4');
+  await execFileAsync('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=320x180:rate=30',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=1000',
+    '-t',
+    '3',
+    '-c:v',
+    'libx264',
+    '-c:a',
+    'aac',
+    longFixture,
   ]);
 });
 
@@ -203,7 +226,7 @@ describe('MCP adapter', () => {
       const output = join(directory, 'mcp-concat.mp4');
       const response = await client.callTool({
         name: 'concatenate_media',
-        arguments: { input: fixture, inputs: [fixture], output, overwrite: true },
+        arguments: { inputs: [fixture, fixture], output, overwrite: true },
       });
       const result = parseToolResult(response) as {
         output: { durationSeconds?: number };
@@ -261,6 +284,128 @@ describe('MCP adapter', () => {
       const vertical = tools.find((t) => t.name === 'make_vertical');
       expect(inspect?.annotations?.readOnlyHint).toBe(true);
       expect(vertical?.annotations?.destructiveHint).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('expects the true joined duration when clips differ in length', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-concat-duration', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const output = join(directory, 'mcp-concat-mixed.mp4');
+      const result = parseToolResult(
+        await client.callTool({
+          name: 'concatenate_media',
+          arguments: { inputs: [fixture, longFixture], output, overwrite: true },
+        }),
+      ) as {
+        plan: { expectations: { durationSeconds?: number } };
+        verification: { passed: boolean };
+      };
+      // 2s + 3s: a per-clip sum, not the first clip's duration multiplied by the clip count.
+      expect(result.plan.expectations.durationSeconds).toBeCloseTo(5, 1);
+      expect(result.verification.passed).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('resolves every concatenated input so the plan replays from any directory', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-concat-paths', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const output = join(directory, 'mcp-concat-paths.mp4');
+      const result = parseToolResult(
+        await client.callTool({
+          name: 'concatenate_media',
+          arguments: { inputs: [fixture, longFixture], output, overwrite: true },
+        }),
+      ) as { plan: { steps: { inputs?: string[] }[] } };
+      const inputs = result.plan.steps[0]?.inputs ?? [];
+      expect(inputs).toHaveLength(2);
+      for (const entry of inputs) expect(isAbsolute(entry)).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('rejects a concatenation of fewer than two clips', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-concat-min', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const response = await client.callTool({
+        name: 'concatenate_media',
+        arguments: { inputs: [fixture], output: join(directory, 'nope.mp4'), overwrite: true },
+      });
+      expect(response.isError).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('fails execute_media_plan when the output cannot be verified', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-execute-strict', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const response = await client.callTool({
+        name: 'execute_media_plan',
+        arguments: {
+          plan: {
+            irVersion: '1',
+            source: { path: fixture },
+            constraints: {},
+            steps: [],
+            expectations: {},
+          },
+          output: join(directory, 'unverifiable.mp4'),
+          overwrite: true,
+        },
+      });
+      expect(response.isError).toBe(true);
+      expect(parseToolResult(response)).toMatchObject({ code: 'VERIFICATION_FAILED' });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('declares an output schema and returns structured content', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-structured', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const { tools } = await client.listTools();
+      for (const tool of tools) expect(tool.outputSchema, tool.name).toBeDefined();
+
+      const response = await client.callTool({
+        name: 'inspect_media',
+        arguments: { input: fixture },
+      });
+      expect(response.structuredContent).toMatchObject({ kind: 'video' });
     } finally {
       await client.close();
       await server.close();

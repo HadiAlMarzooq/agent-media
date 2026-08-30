@@ -68,6 +68,68 @@ const planRefSchema = z
   .object({ irVersion: z.literal('1'), source: z.object({ path: z.string() }) })
   .passthrough();
 
+const videoStreamSchema = z.object({
+  width: z.number(),
+  height: z.number(),
+  aspectRatio: z.string(),
+  fps: z.number().optional(),
+  codec: z.string().optional(),
+  pixelFormat: z.string().optional(),
+  rotationDegrees: z.number().optional(),
+});
+
+const mediaMetadataShape = {
+  path: z.string(),
+  kind: z.enum(['video', 'audio', 'image', 'unknown']),
+  durationSeconds: z.number().optional(),
+  container: z.string().optional(),
+  sizeBytes: z.number(),
+  video: videoStreamSchema.optional(),
+  audio: z.object({
+    present: z.boolean(),
+    codec: z.string().optional(),
+    sampleRate: z.number().optional(),
+    channels: z.number().optional(),
+  }),
+};
+const mediaMetadataSchema = z.object(mediaMetadataShape);
+
+const verificationShape = {
+  passed: z.boolean(),
+  checks: z.record(
+    z.string(),
+    z.object({
+      passed: z.boolean(),
+      expected: z.unknown(),
+      actual: z.unknown(),
+      message: z.string(),
+    }),
+  ),
+  failures: z.array(z.string()),
+};
+const verificationSchema = z.object(verificationShape);
+
+const planSchema = z.object({
+  irVersion: z.literal('1'),
+  source: z.object({ path: z.string() }),
+  constraints: z.record(z.string(), z.unknown()),
+  steps: z.array(z.record(z.string(), z.unknown())),
+  expectations: z.record(z.string(), z.unknown()),
+});
+
+// `source` and `plan` are echoed for convenience and already carry a full schema on
+// inspect_media and plan_media; repeating them on all six workflow tools tripled the cost of
+// tools/list for no added type information.
+const echoedObject = z.looseObject({});
+
+const workflowResultShape = {
+  source: echoedObject,
+  plan: echoedObject,
+  serializedPlan: z.string(),
+  output: mediaMetadataSchema,
+  verification: verificationSchema,
+};
+
 const readOnlyHint = { readOnlyHint: true } as const;
 const destructiveHint = { destructiveHint: true } as const;
 
@@ -79,6 +141,7 @@ export function createMcpServer(): McpServer {
       description:
         'Inspect normalized media metadata. Paths resolve against the server working directory; absolute paths are recommended.',
       inputSchema: { input: z.string().min(1) },
+      outputSchema: mediaMetadataShape,
       annotations: readOnlyHint,
     },
     async ({ input }) => safely(async () => inspectMedia(input)),
@@ -87,6 +150,22 @@ export function createMcpServer(): McpServer {
     'get_media_capabilities',
     {
       description: 'Detect local FFmpeg capabilities.',
+      outputSchema: {
+        ffmpegVersion: z.string(),
+        encoders: z.object({
+          h264: z.boolean(),
+          hevc: z.boolean(),
+          av1: z.boolean(),
+          aac: z.boolean(),
+        }),
+        hardwareAcceleration: z.array(z.string()),
+        filters: z.object({
+          scale: z.boolean(),
+          crop: z.boolean(),
+          concat: z.boolean(),
+          subtitles: z.boolean(),
+        }),
+      },
       annotations: readOnlyHint,
     },
     async () => safely(getCapabilities),
@@ -97,6 +176,7 @@ export function createMcpServer(): McpServer {
       description:
         'Create an inspectable versioned semantic Media IR plan from semantic goals. All goals in the MediaGoals type are accepted.',
       inputSchema: { input: z.string().min(1), goals: goalSchema },
+      outputSchema: { plan: planSchema },
       annotations: readOnlyHint,
     },
     async ({ input, goals }) =>
@@ -124,6 +204,7 @@ export function createMcpServer(): McpServer {
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
@@ -166,6 +247,7 @@ export function createMcpServer(): McpServer {
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
@@ -205,6 +287,7 @@ export function createMcpServer(): McpServer {
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
@@ -242,6 +325,7 @@ export function createMcpServer(): McpServer {
         durationSeconds: z.number().positive().optional(),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
@@ -278,6 +362,7 @@ export function createMcpServer(): McpServer {
         format: z.enum(['jpg', 'png']).optional(),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
@@ -301,21 +386,24 @@ export function createMcpServer(): McpServer {
     'concatenate_media',
     {
       description:
-        'Concatenate multiple media sources into a single verified output. All inputs must have compatible stream layouts. Reports MCP progress when requested. Overwrite is destructive.',
+        'Concatenate two or more media sources into a single verified output. Pass every clip in `inputs`, in playback order. All inputs must have compatible stream layouts. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
-        input: z.string().min(1),
-        inputs: z.array(z.string().min(1)).min(1),
+        inputs: z
+          .array(z.string().min(1))
+          .min(2)
+          .describe('Every clip to join, in playback order. The first entry leads the output.'),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: workflowResultShape,
       annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () =>
         concatenate({
-          input: options.input,
-          inputs: options.inputs,
+          input: options.inputs[0] as string,
+          inputs: options.inputs.slice(1),
           output: options.output,
           ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
           signal: extra.signal,
@@ -330,12 +418,13 @@ export function createMcpServer(): McpServer {
     'execute_media_plan',
     {
       description:
-        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Overwrite is destructive.',
+        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Fails with VERIFICATION_FAILED when the output does not satisfy the plan. Overwrite is destructive.',
       inputSchema: {
         plan: z.union([z.string().min(1), planRefSchema]),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
       },
+      outputSchema: { output: z.string(), verification: verificationSchema },
       annotations: destructiveHint,
     },
     async ({ plan: input, output, overwrite }, extra) => {
@@ -348,10 +437,18 @@ export function createMcpServer(): McpServer {
           signal: extra.signal,
           onProgress: notifications.notify,
         });
-        return {
-          output: execution.output,
-          verification: verifyMedia(await inspectMedia(execution.output), plan.expectations),
-        };
+        const verification = verifyMedia(await inspectMedia(execution.output), plan.expectations);
+        // Match the workflow tools: an unverified artifact is a failed call, not a success
+        // envelope carrying passed:false that a caller branching on isError would sail past.
+        if (!verification.passed) {
+          throw new MediaError({
+            code: 'VERIFICATION_FAILED',
+            message: 'The plan executed, but the output did not satisfy its expectations.',
+            context: { output: execution.output, verification },
+            suggestedActions: ['Inspect the failed checks, adjust the plan, and retry.'],
+          });
+        }
+        return { output: execution.output, verification };
       });
       await notifications.drain();
       return response;
@@ -366,6 +463,7 @@ export function createMcpServer(): McpServer {
         output: z.string().min(1),
         plan: z.union([z.string().min(1), planRefSchema]),
       },
+      outputSchema: verificationShape,
       annotations: readOnlyHint,
     },
     async ({ output, plan: input }) =>
@@ -378,7 +476,13 @@ export function createMcpServer(): McpServer {
 }
 
 function result(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
+  const content = [{ type: 'text' as const, text: JSON.stringify(value) }];
+  // Tools declare an outputSchema, so every success also carries the typed object.
+  return isPlainObject(value) ? { content, structuredContent: value } : { content };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function safely(operation: () => Promise<unknown>) {
@@ -392,7 +496,10 @@ async function safely(operation: () => Promise<unknown>) {
             code: 'UNEXPECTED_ERROR',
             message: error instanceof Error ? error.message : String(error),
           };
-    return { ...result(structured), isError: true };
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(structured) }],
+      isError: true,
+    };
   }
 }
 

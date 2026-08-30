@@ -171,12 +171,14 @@ Run `agent-media-mcp` over stdio. It exposes eleven semantic tools:
 - `normalize_media`
 - `extract_audio`
 - `extract_frame`
-- `concatenate_media`
+- `concatenate_media` (all clips in one ordered `inputs` list)
 - `execute_media_plan`
 - `verify_media` (read-only)
 
 Read-only tools are annotated with `readOnlyHint`; writer tools with `destructiveHint` so clients
-like Claude Code can distinguish safe inspections from overwrite-capable calls.
+like Claude Code can distinguish safe inspections from overwrite-capable calls. Every tool declares
+an `outputSchema` and returns `structuredContent`, so results arrive typed rather than as text a
+client has to parse.
 
 `make_vertical`, `optimize_for_web`, `normalize_media`, `extract_audio`, `extract_frame`, and
 `execute_media_plan` send standard MCP progress notifications when the client requests progress.
