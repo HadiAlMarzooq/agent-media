@@ -168,7 +168,10 @@ try {
     const target = join(workspace, 'frame.jpg');
     const result = await extractFrame({ input: source, output: target, atSeconds: 0.5 });
     if (!result.verification.passed) throw new Error('Frame extraction verification failed.');
-    return { kind: result.output.kind, dimensions: `${result.output.video?.width}x${result.output.video?.height}` };
+    return {
+      kind: result.output.kind,
+      dimensions: `${result.output.video?.width}x${result.output.video?.height}`,
+    };
   });
 
   await benchmark('web-optimization-verification', async () => {
@@ -199,7 +202,13 @@ try {
 
   await benchmark('output-collision-rejection', async () => {
     const target = join(workspace, 'collision.mp4');
-    await makeVertical({ input: source, output: target, width: 180, height: 320, durationSeconds: 1 });
+    await makeVertical({
+      input: source,
+      output: target,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+    });
     const error = await expectedMediaError(() =>
       makeVertical({ input: source, output: target, width: 180, height: 320, durationSeconds: 1 }),
     );

@@ -69,7 +69,9 @@ export async function makeVertical(options: MakeVerticalOptions): Promise<Workfl
     width: dimensions.width,
     height: dimensions.height,
     compatibility: 'high',
-    ...(options.trimStartSeconds === undefined ? {} : { trimStartSeconds: options.trimStartSeconds }),
+    ...(options.trimStartSeconds === undefined
+      ? {}
+      : { trimStartSeconds: options.trimStartSeconds }),
     ...(options.durationSeconds === undefined ? {} : { durationSeconds: options.durationSeconds }),
     ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
     ...audioGoal(options, source),
@@ -86,7 +88,9 @@ export async function optimizeForWeb(options: OptimizeForWebOptions): Promise<Wo
   const plan = await planningPhase(options, 'web-optimized media', source, {
     compatibility: 'high',
     quality: options.quality ?? 'balanced',
-    ...(options.trimStartSeconds === undefined ? {} : { trimStartSeconds: options.trimStartSeconds }),
+    ...(options.trimStartSeconds === undefined
+      ? {}
+      : { trimStartSeconds: options.trimStartSeconds }),
     ...(options.durationSeconds === undefined ? {} : { durationSeconds: options.durationSeconds }),
     ...(options.maxSizeMB === undefined ? {} : { maxSizeMB: options.maxSizeMB }),
     ...audioGoal(options, source),
@@ -102,7 +106,9 @@ export async function normalize(options: NormalizeOptions): Promise<WorkflowResu
   const source = await inspectPhase(options, 'normalized media');
   const plan = await planningPhase(options, 'normalized media', source, {
     compatibility: 'high',
-    ...(options.trimStartSeconds === undefined ? {} : { trimStartSeconds: options.trimStartSeconds }),
+    ...(options.trimStartSeconds === undefined
+      ? {}
+      : { trimStartSeconds: options.trimStartSeconds }),
     ...(options.durationSeconds === undefined ? {} : { durationSeconds: options.durationSeconds }),
     ...audioGoal(options, source),
   });
@@ -116,7 +122,9 @@ export async function extractAudio(options: ExtractAudioOptions): Promise<Workfl
   const source = await inspectPhase(options, 'audio extraction');
   const plan = await planningPhase(options, 'audio extraction', source, {
     extractAudio: { format: options.format ?? 'm4a' },
-    ...(options.trimStartSeconds === undefined ? {} : { trimStartSeconds: options.trimStartSeconds }),
+    ...(options.trimStartSeconds === undefined
+      ? {}
+      : { trimStartSeconds: options.trimStartSeconds }),
     ...(options.durationSeconds === undefined ? {} : { durationSeconds: options.durationSeconds }),
   });
   return executeAndVerify(options, source, plan, 'Audio extraction is verified and ready.');
@@ -166,10 +174,7 @@ function audioGoal(
   return source.audio.present ? { audio: 'preserve' } : {};
 }
 
-async function inspectPhase(
-  options: WorkflowOptions,
-  label: string,
-): Promise<MediaMetadata> {
+async function inspectPhase(options: WorkflowOptions, label: string): Promise<MediaMetadata> {
   emit(options.onProgress, 'inspecting', 0, `Inspecting the source media for ${label}.`);
   const source = await inspectMedia(options.input, ffmpegOptions(options));
   emit(options.onProgress, 'inspecting', 10, 'Source inspection completed.');
@@ -188,7 +193,6 @@ async function planningPhase(
     capabilities: await getCapabilities(ffmpegOptions(options)),
     goals: goals as never,
   });
-  const serializedPlan = serializePlan(plan);
   emit(options.onProgress, 'planning', 20, `${label} plan is ready.`);
   return plan;
 }

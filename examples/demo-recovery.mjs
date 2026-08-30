@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import process from 'node:process';
 
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '../packages/core/dist/index.js';
@@ -43,12 +43,26 @@ function warn(message) {
 
 async function generateSource(path) {
   const result = await run('ffmpeg', [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30',
-    '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000',
-    '-t', '2',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=320x180:rate=30',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=880:sample_rate=48000',
+    '-t',
+    '2',
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'aac',
     path,
   ]);
   if (result.exitCode !== 0) throw new Error(result.stderr);
@@ -57,7 +71,8 @@ async function generateSource(path) {
 function run(executable, args) {
   return new Promise((resolveResult, reject) => {
     const child = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '';
+    let stdout = '',
+      stderr = '';
     child.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
     child.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
     child.once('error', reject);
@@ -65,9 +80,15 @@ function run(executable, args) {
   });
 }
 
-process.stdout.write(`${BOLD}${CYAN}╔══════════════════════════════════════════════════════╗${RESET}\n`);
-process.stdout.write(`${BOLD}${CYAN}║  Agent Media — Verified Recovery Demo                  ║${RESET}\n`);
-process.stdout.write(`${BOLD}${CYAN}╚══════════════════════════════════════════════════════╝${RESET}\n`);
+process.stdout.write(
+  `${BOLD}${CYAN}╔══════════════════════════════════════════════════════╗${RESET}\n`,
+);
+process.stdout.write(
+  `${BOLD}${CYAN}║  Agent Media — Verified Recovery Demo                  ║${RESET}\n`,
+);
+process.stdout.write(
+  `${BOLD}${CYAN}╚══════════════════════════════════════════════════════╝${RESET}\n`,
+);
 
 step('Generating test source video');
 await generateSource(sourcePath);
@@ -112,7 +133,9 @@ await executePlan(replayed, {
   output: firstOutputPath,
   sourceMetadata: source,
   overwrite: true,
-  onProgress: (p) => { if (p.percent % 25 < 5) progress1.push(p.percent); },
+  onProgress: (p) => {
+    if (p.percent % 25 < 5) progress1.push(p.percent);
+  },
 });
 const firstOutput = await inspectMedia(firstOutputPath);
 info('Output size', `${firstOutput.sizeBytes} bytes`);
@@ -157,7 +180,9 @@ await executePlan(replayedRecovered, {
   output: recoveredOutputPath,
   sourceMetadata: source,
   overwrite: true,
-  onProgress: (p) => { if (p.percent % 25 < 5) progress2.push(p.percent); },
+  onProgress: (p) => {
+    if (p.percent % 25 < 5) progress2.push(p.percent);
+  },
 });
 const recoveredOutput = await inspectMedia(recoveredOutputPath);
 info('Output size', `${recoveredOutput.sizeBytes} bytes`);
@@ -173,8 +198,14 @@ success('videoCodec: h264 ✓');
 success('pixelFormat: yuv420p ✓');
 success('audio: present ✓');
 
-process.stdout.write(`\n${BOLD}${GREEN}╔══════════════════════════════════════════════════════╗${RESET}\n`);
-process.stdout.write(`${BOLD}${GREEN}║  Recovery complete — 0 silent failures                 ║${RESET}\n`);
-process.stdout.write(`${BOLD}${GREEN}╚══════════════════════════════════════════════════════╝${RESET}\n`);
+process.stdout.write(
+  `\n${BOLD}${GREEN}╔══════════════════════════════════════════════════════╗${RESET}\n`,
+);
+process.stdout.write(
+  `${BOLD}${GREEN}║  Recovery complete — 0 silent failures                 ║${RESET}\n`,
+);
+process.stdout.write(
+  `${BOLD}${GREEN}╚══════════════════════════════════════════════════════╝${RESET}\n`,
+);
 
 await rm(workspace, { recursive: true, force: true });

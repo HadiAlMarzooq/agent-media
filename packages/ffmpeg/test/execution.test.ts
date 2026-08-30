@@ -5,7 +5,15 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
 
-import { executePlan, inspectMedia, makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame } from '../src/index.js';
+import {
+  executePlan,
+  inspectMedia,
+  makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
+} from '../src/index.js';
 import type { MediaProgress } from '../src/index.js';
 import { runProcess } from '../src/process.js';
 

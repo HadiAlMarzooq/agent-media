@@ -32,15 +32,15 @@ step in a safer contract:
 semantic goal → inspect → versioned Media IR → execute → inspect again → verify
 ```
 
-| Property             | What the agent gets                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| Semantic planning    | Goals and reasons instead of raw FFmpeg flags                                        |
-| Portable Media IR    | Validated JSON that can be reviewed, persisted, and replayed                         |
-| Outcome verification | Structured checks for duration, geometry, size, audio, codec, and pixels            |
-| Structured recovery  | Stable error codes and every failed verification check in one report                 |
-| Observable execution | Monotonic progress through SDK callbacks, CLI NDJSON, and MCP notifications           |
-| One implementation   | The SDK, JSON CLI, MCP server, and high-level workflows share the same core           |
-| 5 high-level workflows | `makeVertical`, `optimizeForWeb`, `normalize`, `extractAudio`, `extractFrame`     |
+| Property               | What the agent gets                                                           |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| Semantic planning      | Goals and reasons instead of raw FFmpeg flags                                 |
+| Portable Media IR      | Validated JSON that can be reviewed, persisted, and replayed                  |
+| Outcome verification   | Structured checks for duration, geometry, size, audio, codec, and pixels      |
+| Structured recovery    | Stable error codes and every failed verification check in one report          |
+| Observable execution   | Monotonic progress through SDK callbacks, CLI NDJSON, and MCP notifications   |
+| One implementation     | The SDK, JSON CLI, MCP server, and high-level workflows share the same core   |
+| 5 high-level workflows | `makeVertical`, `optimizeForWeb`, `normalize`, `extractAudio`, `extractFrame` |
 
 ## Quick start
 
@@ -56,7 +56,13 @@ pnpm build
 Create a verified vertical video with one SDK call:
 
 ```ts
-import { makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame } from '@hadialmarzooq/agent-media-ffmpeg';
+import {
+  makeVertical,
+  optimizeForWeb,
+  normalize,
+  extractAudio,
+  extractFrame,
+} from '@hadialmarzooq/agent-media-ffmpeg';
 
 // 9:16 vertical, H.264/yuv420p, faststart, size-constrained
 const vertical = await makeVertical({

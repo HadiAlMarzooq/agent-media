@@ -282,36 +282,36 @@ const verification = verifyMedia(output, replayed.expectations);
 
 ## CLI reference
 
-| Command                       | Purpose                                   |
-| ----------------------------- | ----------------------------------------- |
-| `inspect <input>`             | normalized metadata                       |
-| `capabilities`                | installed FFmpeg features                 |
-| `plan <input> [goals]`        | create Media IR; optionally write `--out` |
-| `vertical <input> --output`   | complete high-level vertical workflow     |
-| `optimize <input> --output`   | complete web optimization workflow        |
-| `normalize <input> --output`  | complete normalization workflow           |
-| `extract-audio <input> --output` | complete audio extraction workflow     |
-| `extract-frame <input> --output` | complete frame extraction workflow     |
-| `execute <plan> --output`     | replay persisted Media IR                 |
-| `verify <output> --against`   | verify media against persisted Media IR   |
+| Command                          | Purpose                                   |
+| -------------------------------- | ----------------------------------------- |
+| `inspect <input>`                | normalized metadata                       |
+| `capabilities`                   | installed FFmpeg features                 |
+| `plan <input> [goals]`           | create Media IR; optionally write `--out` |
+| `vertical <input> --output`      | complete high-level vertical workflow     |
+| `optimize <input> --output`      | complete web optimization workflow        |
+| `normalize <input> --output`     | complete normalization workflow           |
+| `extract-audio <input> --output` | complete audio extraction workflow        |
+| `extract-frame <input> --output` | complete frame extraction workflow        |
+| `execute <plan> --output`        | replay persisted Media IR                 |
+| `verify <output> --against`      | verify media against persisted Media IR   |
 
 `vertical`, `optimize`, `normalize`, `extract-audio`, `extract-frame`, and `execute` accept
 `--progress`. Successful result JSON is stdout; progress NDJSON and structured failures are stderr.
 
 ## MCP reference
 
-| Tool                  | Input summary                                        |
-| --------------------- | ---------------------------------------------------- |
-| `inspect_media`       | `input`                                              |
-| `get_media_capabilities` | none                                              |
-| `plan_media`          | `input`, semantic `goals`                            |
-| `make_vertical`       | input/output, geometry, trim, size, audio, overwrite |
-| `optimize_for_web`    | input/output, trim, size, quality, audio, overwrite  |
-| `normalize_media`     | input/output, trim, audio, overwrite                 |
-| `extract_audio`       | input/output, format, trim, overwrite                |
-| `extract_frame`       | input/output, timestamp, format, overwrite           |
-| `execute_media_plan`  | plan object or JSON, output, overwrite               |
-| `verify_media`        | output, plan object or JSON                          |
+| Tool                     | Input summary                                        |
+| ------------------------ | ---------------------------------------------------- |
+| `inspect_media`          | `input`                                              |
+| `get_media_capabilities` | none                                                 |
+| `plan_media`             | `input`, semantic `goals`                            |
+| `make_vertical`          | input/output, geometry, trim, size, audio, overwrite |
+| `optimize_for_web`       | input/output, trim, size, quality, audio, overwrite  |
+| `normalize_media`        | input/output, trim, audio, overwrite                 |
+| `extract_audio`          | input/output, format, trim, overwrite                |
+| `extract_frame`          | input/output, timestamp, format, overwrite           |
+| `execute_media_plan`     | plan object or JSON, output, overwrite               |
+| `verify_media`           | output, plan object or JSON                          |
 
 MCP plan handoff does not require manual stringification. Failures use `isError: true` and the same
 structured error shape. `make_vertical` and `execute_media_plan` honor request cancellation and emit

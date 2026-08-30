@@ -15,7 +15,7 @@ owner explicitly approves publication.
 | 7     | Pre-public review                                  | 6            | API, docs, release, licensing and readiness audit                           | Complete |
 | 8     | Evidence-driven release hardening                  | 7            | Public-boundary dogfood and verified plan integrity                         | Complete |
 | 9     | Standout release evidence                          | 8            | Recovery demo, corpus parity, vertical workflow, progress, docs, artifacts  | Complete |
-| 10    | Standout polish                                    | 9            | All 5 workflows, 13-scenario corpus, visual demo GIF, expanded docs          | Complete |
+| 10    | Standout polish                                    | 9            | All 5 workflows, 13-scenario corpus, visual demo GIF, expanded docs         | Complete |
 
 ## Phase tasks
 
