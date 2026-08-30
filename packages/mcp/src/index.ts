@@ -28,9 +28,14 @@ import {
   inspectMedia,
   makeVertical,
   normalize,
+  operatorLimits,
   optimizeForWeb,
 } from '@hadialmarzooq/agent-media-ffmpeg';
-import type { ContentCheckOptions, MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
+import type {
+  ContentCheckOptions,
+  FfmpegOptions,
+  MediaProgress,
+} from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
 
 const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
@@ -191,6 +196,13 @@ const destructiveHint = { destructiveHint: true } as const;
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({ name: 'agent-media', version: packageVersion });
+  // Limits belong to whoever runs the server, not to the model calling it. They arrive from the
+  // environment and are applied to every call, so no tool argument can widen them.
+  const limits = operatorLimits();
+  const probeOptions = {
+    ...(limits.ffprobePath === undefined ? {} : { ffprobePath: limits.ffprobePath }),
+    ...(limits.timeoutMs === undefined ? {} : { timeoutMs: limits.timeoutMs }),
+  };
   server.registerTool(
     'inspect_media',
     {
@@ -200,7 +212,7 @@ export function createMcpServer(): McpServer {
       outputSchema: mediaMetadataShape,
       annotations: readOnlyHint,
     },
-    async ({ input }) => safely(async () => inspectMedia(input)),
+    async ({ input }) => safely(async () => inspectMedia(input, probeOptions)),
   );
   server.registerTool(
     'get_media_capabilities',
@@ -237,9 +249,9 @@ export function createMcpServer(): McpServer {
     async ({ input, goals }) =>
       safely(async () => ({
         plan: planMedia({
-          source: await inspectMedia(input),
+          source: await inspectMedia(input, probeOptions),
           goals: cleanGoals(validateGoalSchema(goals)),
-          capabilities: await getCapabilities(),
+          capabilities: await getCapabilities(probeOptions),
         }),
       })),
   );
@@ -273,10 +285,10 @@ export function createMcpServer(): McpServer {
     async ({ plan: input }) =>
       safely(async () => {
         const plan = normalizePlan(input);
-        const source = await inspectMedia(plan.source.path);
+        const source = await inspectMedia(plan.source.path, probeOptions);
         // A concatenation's conflicts live in the other clips, so they have to be inspected too;
         // otherwise a stream-layout mismatch stays invisible until FFmpeg refuses the join.
-        const concatenationSources = await inspectConcatenationSources(plan, source);
+        const concatenationSources = await inspectConcatenationSources(plan, source, probeOptions);
         return {
           issues: inspectPlanIssues(plan, source, {
             ...(concatenationSources === undefined ? {} : { concatenationSources }),
@@ -307,7 +319,10 @@ export function createMcpServer(): McpServer {
     async ({ plan: input }) =>
       safely(async () => {
         const plan = normalizePlan(input);
-        const { plan: repaired, repairs } = repairPlan(plan, await inspectMedia(plan.source.path));
+        const { plan: repaired, repairs } = repairPlan(
+          plan,
+          await inspectMedia(plan.source.path, probeOptions),
+        );
         return { repairs, repairedPlan: repaired };
       }),
   );
@@ -364,6 +379,7 @@ export function createMcpServer(): McpServer {
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
             ...contentCheckOptions(options.contentChecks),
             ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            ...limits,
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -411,6 +427,7 @@ export function createMcpServer(): McpServer {
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
             ...contentCheckOptions(options.contentChecks),
             ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            ...limits,
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -454,6 +471,7 @@ export function createMcpServer(): McpServer {
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
             ...contentCheckOptions(options.contentChecks),
             ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            ...limits,
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -497,6 +515,7 @@ export function createMcpServer(): McpServer {
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
             ...contentCheckOptions(options.contentChecks),
             ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            ...limits,
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -534,6 +553,7 @@ export function createMcpServer(): McpServer {
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
             ...contentCheckOptions(options.contentChecks),
             ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            ...limits,
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -570,6 +590,7 @@ export function createMcpServer(): McpServer {
             ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
             ...contentCheckOptions(options.contentChecks),
             ...(options.warnOnly === undefined ? {} : { warnOnly: options.warnOnly }),
+            ...limits,
             signal: extra.signal,
             onProgress: notifications.notify,
           }),
@@ -607,6 +628,7 @@ export function createMcpServer(): McpServer {
       const response = await safely(async () => {
         const plan = normalizePlan(input);
         const execution = await executePlan(plan, {
+          ...limits,
           output,
           ...(overwrite === undefined ? {} : { overwrite }),
           ...(writeReceipt === undefined ? {} : { writeReceipt }),
@@ -621,7 +643,7 @@ export function createMcpServer(): McpServer {
         const verification =
           execution.verification ??
           execution.receipt?.verification ??
-          verifyMedia(await inspectMedia(execution.output), plan.expectations);
+          verifyMedia(await inspectMedia(execution.output, probeOptions), plan.expectations);
         // Match the workflow tools: an unverified artifact is a failed call, not a success
         // envelope carrying passed:false that a caller branching on isError would sail past.
         if (!verification.passed) {
@@ -664,6 +686,7 @@ export function createMcpServer(): McpServer {
       const notifications = mcpProgress(extra);
       const response = await safely(async () => {
         const execution = await resumeFromReceipt(parseReceipt(receipt), {
+          ...limits,
           ...(output === undefined ? {} : { output }),
           ...(overwrite === undefined ? {} : { overwrite }),
           signal: extra.signal,
@@ -705,7 +728,7 @@ export function createMcpServer(): McpServer {
     async ({ output, plan: input }) =>
       safely(async () => {
         const plan = normalizePlan(input);
-        return verifyMedia(await inspectMedia(output), plan.expectations);
+        return verifyMedia(await inspectMedia(output, probeOptions), plan.expectations);
       }),
   );
   return server;
@@ -755,12 +778,13 @@ async function safely(operation: () => Promise<unknown>) {
 async function inspectConcatenationSources(
   plan: MediaPlan,
   source: MediaMetadata,
+  probeOptions: FfmpegOptions,
 ): Promise<MediaMetadata[] | undefined> {
   const concatenate = plan.steps.find((step) => step.operation === 'concatenate');
   if (concatenate?.operation !== 'concatenate') return undefined;
   const sources: MediaMetadata[] = [];
   for (const [index, input] of concatenate.inputs.entries()) {
-    sources.push(index === 0 ? source : await inspectMedia(input));
+    sources.push(index === 0 ? source : await inspectMedia(input, probeOptions));
   }
   return sources;
 }

@@ -12,7 +12,10 @@ import {
 } from '@hadialmarzooq/agent-media-core';
 
 import {
+  DEFAULT_EXECUTION_TIMEOUT_MS,
+  DEFAULT_PROBE_TIMEOUT_MS,
   analyzeContent,
+  operatorLimits,
   resumeFromReceipt,
   concatenate,
   executePlan,
@@ -639,6 +642,52 @@ describe('execution', () => {
     ).rejects.toThrowError(
       expect.objectContaining({ code: 'INVALID_PLAN', message: expect.stringContaining('two') }),
     );
+  });
+
+  it('gives encoding a budget far larger than probing', () => {
+    // A ten-minute 1080p source needs minutes of real work; the probe budget would fail it.
+    expect(DEFAULT_EXECUTION_TIMEOUT_MS).toBeGreaterThanOrEqual(30 * 60_000);
+    expect(DEFAULT_PROBE_TIMEOUT_MS).toBeLessThan(DEFAULT_EXECUTION_TIMEOUT_MS);
+  });
+
+  it('reads operator limits from the environment', () => {
+    expect(
+      operatorLimits({
+        AGENT_MEDIA_TIMEOUT_MS: '120000',
+        AGENT_MEDIA_ALLOWED_OUTPUT_DIR: '/var/out',
+        AGENT_MEDIA_FFMPEG_PATH: '/opt/ffmpeg',
+        AGENT_MEDIA_FFPROBE_PATH: '/opt/ffprobe',
+      }),
+    ).toEqual({
+      timeoutMs: 120_000,
+      allowedOutputDirectory: '/var/out',
+      ffmpegPath: '/opt/ffmpeg',
+      ffprobePath: '/opt/ffprobe',
+    });
+    expect(operatorLimits({})).toEqual({});
+    expect(operatorLimits({ AGENT_MEDIA_TIMEOUT_MS: '   ' })).toEqual({});
+  });
+
+  it('rejects an unusable timeout limit instead of ignoring it', () => {
+    for (const value of ['0', '-1', 'soon']) {
+      expect(() => operatorLimits({ AGENT_MEDIA_TIMEOUT_MS: value })).toThrowError(
+        expect.objectContaining({ code: 'INVALID_PLAN' }),
+      );
+    }
+  });
+
+  it('confines writes to the allowed output directory', async () => {
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    await expect(
+      executePlan(plan, {
+        output: join(directory, 'confined.mp4'),
+        sourceMetadata: metadata,
+        allowedOutputDirectory: join(directory, 'nested'),
+      }),
+    ).rejects.toThrowError(expect.objectContaining({ code: 'PATH_NOT_ALLOWED' }));
   });
 });
 

@@ -18,6 +18,7 @@ import {
 } from '@hadialmarzooq/agent-media-core';
 import {
   executePlan,
+  operatorLimits,
   resumeFromReceipt,
   getCapabilities,
   inspectMedia,
@@ -34,19 +35,44 @@ const packageVersion = (createRequire(import.meta.url)('../package.json') as { v
   .version;
 
 export function createProgram(): Command {
+  // The same operator limits the MCP server reads, so a shell and an agent are confined alike.
+  const limits = operatorLimits();
   const program = new Command();
   program
     .name('agent-media')
     .description('Deterministic semantic media transformations.')
-    .version(packageVersion);
+    .version(packageVersion)
+    .option('--timeout <ms>', 'maximum milliseconds for any single FFmpeg run')
+    .option('--allowed-output-dir <path>', 'confine every write to this directory tree');
+
+  /** Environment limits, with this invocation's flags taking precedence. */
+  const runtimeLimits = (): typeof limits => {
+    const flags = program.opts();
+    const timeout = flags.timeout === undefined ? undefined : Number(flags.timeout);
+    if (timeout !== undefined && (!Number.isFinite(timeout) || timeout <= 0)) {
+      throw new MediaError({
+        code: 'INVALID_PLAN',
+        message: '--timeout must be a positive number of milliseconds.',
+        context: { value: flags.timeout },
+        suggestedActions: ['Pass --timeout with a positive integer, or omit it.'],
+      });
+    }
+    return {
+      ...limits,
+      ...(timeout === undefined ? {} : { timeoutMs: timeout }),
+      ...(flags.allowedOutputDir === undefined
+        ? {}
+        : { allowedOutputDirectory: String(flags.allowedOutputDir) }),
+    };
+  };
   program
     .command('inspect <input>')
     .description('Inspect media metadata.')
-    .action(async (input) => print(await inspectMedia(input)));
+    .action(async (input) => print(await inspectMedia(input, runtimeLimits())));
   program
     .command('capabilities')
     .description('Detect local FFmpeg capabilities.')
-    .action(async () => print(await getCapabilities()));
+    .action(async () => print(await getCapabilities(runtimeLimits())));
   program
     .command('plan <input>')
     .description('Create a versioned semantic media plan.')
@@ -62,7 +88,7 @@ export function createProgram(): Command {
     .option('--out <path>', 'write the plan JSON to a file')
     .action(async (input, options) => {
       const plan = planMedia({
-        source: await inspectMedia(input),
+        source: await inspectMedia(input, runtimeLimits()),
         goals: {
           trimStartSeconds: options.trimStart,
           durationSeconds: options.duration,
@@ -74,7 +100,7 @@ export function createProgram(): Command {
           quality: options.quality,
           ...(options.removeAudio ? { audio: 'remove' } : {}),
         },
-        capabilities: await getCapabilities(),
+        capabilities: await getCapabilities(runtimeLimits()),
       });
       const serialized = serializePlan(plan);
       if (options.out !== undefined) await writeFile(options.out, `${serialized}\n`, 'utf8');
@@ -96,6 +122,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await makeVertical({
+          ...runtimeLimits(),
           input,
           output: options.output,
           width: options.width,
@@ -124,6 +151,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await optimizeForWeb({
+          ...runtimeLimits(),
           input,
           output: options.output,
           trimStartSeconds: options.trimStart,
@@ -149,6 +177,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await normalize({
+          ...runtimeLimits(),
           input,
           output: options.output,
           trimStartSeconds: options.trimStart,
@@ -172,6 +201,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await extractAudio({
+          ...runtimeLimits(),
           input,
           output: options.output,
           ...(options.format === undefined ? {} : { format: options.format }),
@@ -194,6 +224,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await extractFrame({
+          ...runtimeLimits(),
           input,
           output: options.output,
           ...(options.at === undefined ? {} : { atSeconds: options.at }),
@@ -214,6 +245,7 @@ export function createProgram(): Command {
       const onProgress = progressWriter(Boolean(options.progress));
       print(
         await concatenate({
+          ...runtimeLimits(),
           inputs: [input, ...options.inputs],
           output: options.output,
           overwrite: options.overwrite,
@@ -226,7 +258,7 @@ export function createProgram(): Command {
     .description('Detect mechanical plan issues against a real source without executing.')
     .action(async (planPath) => {
       const plan = parsePlan(await readFile(planPath, 'utf8'));
-      const source = await inspectMedia(plan.source.path);
+      const source = await inspectMedia(plan.source.path, runtimeLimits());
       print({ issues: inspectPlanIssues(plan, source) });
     });
   program
@@ -235,7 +267,7 @@ export function createProgram(): Command {
     .requiredOption('--out <path>', 'write the repaired plan JSON to a file')
     .action(async (planPath, options) => {
       const plan = parsePlan(await readFile(planPath, 'utf8'));
-      const source = await inspectMedia(plan.source.path);
+      const source = await inspectMedia(plan.source.path, runtimeLimits());
       const { plan: repaired, repairs } = repairPlan(plan, source);
       await writeFile(options.out, `${serializePlan(repaired)}\n`, 'utf8');
       print({ repairs, repairedPlan: repaired });
@@ -256,6 +288,7 @@ export function createProgram(): Command {
       const receipt = parseReceipt(await readFile(receiptPath, 'utf8'));
       const onProgress = progressWriter(Boolean(options.progress));
       const execution = await resumeFromReceipt(receipt, {
+        ...runtimeLimits(),
         ...(options.output === undefined ? {} : { output: options.output }),
         ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
         ...(onProgress === undefined ? {} : { onProgress }),
@@ -288,6 +321,7 @@ export function createProgram(): Command {
       const plan = parsePlan(await readFile(planPath, 'utf8'));
       const onProgress = progressWriter(Boolean(options.progress));
       const result = await executePlan(plan, {
+        ...runtimeLimits(),
         output: options.output,
         overwrite: options.overwrite,
         ...(onProgress === undefined ? {} : { onProgress }),
@@ -299,7 +333,7 @@ export function createProgram(): Command {
       const verification =
         result.verification ??
         result.receipt?.verification ??
-        verifyMedia(await inspectMedia(result.output), plan.expectations);
+        verifyMedia(await inspectMedia(result.output, runtimeLimits()), plan.expectations);
       if (!verification.passed) {
         throw new MediaError({
           code: 'VERIFICATION_FAILED',
@@ -321,7 +355,7 @@ export function createProgram(): Command {
     .requiredOption('--against <plan>', 'plan JSON path')
     .action(async (outputPath, options) => {
       const plan = parsePlan(await readFile(options.against, 'utf8'));
-      print(verifyMedia(await inspectMedia(outputPath), plan.expectations));
+      print(verifyMedia(await inspectMedia(outputPath, runtimeLimits()), plan.expectations));
     });
   return program;
 }

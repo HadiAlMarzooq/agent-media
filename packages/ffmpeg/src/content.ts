@@ -1,5 +1,6 @@
 import type { MediaMetadata, VerificationCheck } from '@hadialmarzooq/agent-media-core';
 
+import { DEFAULT_EXECUTION_TIMEOUT_MS } from './config.js';
 import { runProcess } from './process.js';
 import type { FfmpegOptions } from './inspect.js';
 
@@ -83,7 +84,7 @@ export async function analyzeContent(
   args.push('-f', 'null', '-');
 
   const result = await runProcess(ffmpegOptions.ffmpegPath ?? 'ffmpeg', args, {
-    timeoutMs: ffmpegOptions.timeoutMs ?? 120_000,
+    timeoutMs: ffmpegOptions.timeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
   });
   const stderr = result.stderr;
   const checks: Record<string, VerificationCheck> = {};

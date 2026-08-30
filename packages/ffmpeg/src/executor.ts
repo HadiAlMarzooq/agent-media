@@ -20,6 +20,7 @@ import type {
 
 import { compilePlan, extensionForPlan, type CompiledOperation } from './compiler.js';
 import { analyzeContent, type ContentCheckOptions } from './content.js';
+import { DEFAULT_EXECUTION_TIMEOUT_MS } from './config.js';
 import { inspectMedia, type FfmpegOptions } from './inspect.js';
 import { createExecutionProgressReporter, type ProgressCallback } from './progress.js';
 import { runProcess } from './process.js';
@@ -229,7 +230,7 @@ async function executePlanInternal(
       options.ffmpegPath ?? operation.executable,
       progressArgs(operation.args),
       {
-        ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+        timeoutMs: options.timeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
         onStdout: progress.write,
       },
@@ -257,7 +258,11 @@ async function executePlanInternal(
     throw new MediaError({
       code: 'OPERATION_TIMEOUT',
       message: 'Media execution exceeded its configured timeout.',
-      context: { input: plan.source.path, output, timeoutMs: options.timeoutMs ?? 30_000 },
+      context: {
+        input: plan.source.path,
+        output,
+        timeoutMs: options.timeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
+      },
       suggestedActions: ['Use a longer timeout or a smaller media operation.'],
       debug: { backend: 'ffmpeg', stderr: result.stderr },
     });
