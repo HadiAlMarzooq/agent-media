@@ -65,6 +65,36 @@ claude mcp add agent-media -- agent-media-mcp
 Paths in tool arguments resolve against the server's working directory. Pass absolute paths unless
 you know what that directory is.
 
+### Limits you set, not the model
+
+The server reads its limits from the environment. No tool argument can widen them, so the model
+driving the tools cannot write outside the directory you allow or run longer than you permit:
+
+```json
+{
+  "mcpServers": {
+    "agent-media": {
+      "command": "agent-media-mcp",
+      "env": {
+        "AGENT_MEDIA_ALLOWED_OUTPUT_DIR": "/Users/you/Movies/agent-output",
+        "AGENT_MEDIA_TIMEOUT_MS": "600000"
+      }
+    }
+  }
+}
+```
+
+| Variable                         | Effect                                                           |
+| -------------------------------- | ---------------------------------------------------------------- |
+| `AGENT_MEDIA_ALLOWED_OUTPUT_DIR` | writes outside this tree fail with `PATH_NOT_ALLOWED`            |
+| `AGENT_MEDIA_TIMEOUT_MS`         | any single FFmpeg run beyond this fails with `OPERATION_TIMEOUT` |
+| `AGENT_MEDIA_FFMPEG_PATH`        | an `ffmpeg` that is not on `PATH`                                |
+| `AGENT_MEDIA_FFPROBE_PATH`       | an `ffprobe` that is not on `PATH`                               |
+
+Without `AGENT_MEDIA_TIMEOUT_MS`, probes get 30 seconds and encodes get 30 minutes. Encoding a long
+source is minutes of real work, so the execution budget is deliberately generous; cancel a run you
+no longer want, which stops FFmpeg immediately and leaves no partial file.
+
 ### The one-call workflows
 
 Six tools do the whole loop — plan, execute, and verify — and fail loudly if the output does not
@@ -213,6 +243,9 @@ the call.
 
 Every successful command writes one JSON document to stdout. Progress is newline-delimited JSON on
 stderr, so a pipeline never receives mixed output.
+
+The CLI reads the same variables, and `--timeout <ms>` / `--allowed-output-dir <path>` override
+them for one invocation.
 
 ```bash
 # One-call workflows

@@ -1,4 +1,10 @@
 export { getCapabilities } from './capabilities.js';
+export {
+  DEFAULT_EXECUTION_TIMEOUT_MS,
+  DEFAULT_PROBE_TIMEOUT_MS,
+  operatorLimits,
+} from './config.js';
+export type { OperatorLimits } from './config.js';
 export { analyzeContent, contentCheckNames } from './content.js';
 export type {
   BlackFrameOptions,

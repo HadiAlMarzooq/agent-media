@@ -671,6 +671,34 @@ describe('MCP adapter', () => {
       await server.close();
     }
   });
+
+  it("applies the operator's output confinement to every tool", async () => {
+    const previous = process.env.AGENT_MEDIA_ALLOWED_OUTPUT_DIR;
+    process.env.AGENT_MEDIA_ALLOWED_OUTPUT_DIR = join(directory, 'confined');
+    try {
+      const server = createMcpServer();
+      const client = new Client({ name: 'agent-media-limits-test', version: '1.0.0' });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+
+      try {
+        // No tool accepts an output-directory argument, so the model cannot widen this.
+        const response = await client.callTool({
+          name: 'make_vertical',
+          arguments: { input: fixture, output: join(directory, 'escaped.mp4'), overwrite: true },
+        });
+        expect(response.isError).toBe(true);
+        expect(parseToolResult(response)).toMatchObject({ code: 'PATH_NOT_ALLOWED' });
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.AGENT_MEDIA_ALLOWED_OUTPUT_DIR;
+      else process.env.AGENT_MEDIA_ALLOWED_OUTPUT_DIR = previous;
+    }
+  });
 });
 
 function parseToolResult(response: unknown): unknown {

@@ -358,10 +358,37 @@ methodology.
 
 ## Safety defaults
 
-Execution rejects source overwrite, refuses existing outputs unless `overwrite` is explicit, can
-confine writes to an allowed directory, accepts cancellation and timeout controls, and removes
-partial outputs after failure on a best-effort basis. Concatenation inputs are inspected before
-execution and rejected when their stream layouts are incompatible.
+Execution rejects source overwrite, refuses existing outputs unless `overwrite` is explicit,
+accepts cancellation, and removes partial outputs after failure on a best-effort basis.
+Concatenation inputs are inspected before execution and rejected when their stream layouts are
+incompatible.
+
+Limits belong to whoever runs the tool, not to the model calling it. The MCP server and the CLI
+read them from the environment, and no tool argument can widen them:
+
+| Variable                         | Effect                                      |
+| -------------------------------- | ------------------------------------------- |
+| `AGENT_MEDIA_ALLOWED_OUTPUT_DIR` | confine every write to one directory tree   |
+| `AGENT_MEDIA_TIMEOUT_MS`         | cap how long any single FFmpeg run may take |
+| `AGENT_MEDIA_FFMPEG_PATH`        | locate an `ffmpeg` that is not on `PATH`    |
+| `AGENT_MEDIA_FFPROBE_PATH`       | locate an `ffprobe` that is not on `PATH`   |
+
+```json
+{
+  "mcpServers": {
+    "agent-media": {
+      "command": "agent-media-mcp",
+      "env": { "AGENT_MEDIA_ALLOWED_OUTPUT_DIR": "/Users/you/Movies/agent-output" }
+    }
+  }
+}
+```
+
+The CLI reads the same variables and accepts `--timeout` and `--allowed-output-dir` per invocation.
+
+Probing and encoding get different budgets by default: a probe that has not answered in 30 seconds
+is stuck, while a real encode is allowed 30 minutes. Cancellation, which is immediate and leaves no
+partial file, is the intended way to stop a run early.
 
 ## Development
 

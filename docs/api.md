@@ -329,6 +329,17 @@ const verification = verifyMedia(output, replayed.expectations);
 | `inspect_receipt`        | receipt JSON (read-only)                                     |
 | `verify_media`           | output, plan object or JSON (read-only)                      |
 
+## Operator limits
+
+`operatorLimits(env?)` reads `AGENT_MEDIA_ALLOWED_OUTPUT_DIR`, `AGENT_MEDIA_TIMEOUT_MS`,
+`AGENT_MEDIA_FFMPEG_PATH`, and `AGENT_MEDIA_FFPROBE_PATH` into the options every entry point
+accepts. The MCP server and the CLI apply it to every call; an unusable `AGENT_MEDIA_TIMEOUT_MS`
+fails at startup rather than being ignored.
+
+`DEFAULT_PROBE_TIMEOUT_MS` (30s) and `DEFAULT_EXECUTION_TIMEOUT_MS` (30min) are the defaults when no
+`timeoutMs` is supplied. They differ because a probe reads a header and returns, while an encode of
+a long source is minutes of real work.
+
 ## Receipts
 
 `executePlan` and every workflow accept `writeReceipt` and `resume`. A receipt is a versioned JSON
