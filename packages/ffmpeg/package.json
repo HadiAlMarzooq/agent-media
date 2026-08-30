@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-ffmpeg",
-  "version": "0.0.10",
+  "version": "0.1.0",
   "description": "Safe FFmpeg execution, progress, and verified media workflows for software agents.",
   "keywords": [
     "media",
@@ -34,6 +34,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@hadialmarzooq/agent-media-core": "workspace:*"
   },

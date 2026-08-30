@@ -1,7 +1,6 @@
 # Roadmap
 
-Status is updated as each scoped phase is completed. This repository remains private until the
-owner explicitly approves publication.
+Status is updated as each scoped phase is completed. The repository is public at v0.1.0.
 
 | Phase | Scope                                              | Dependencies | Acceptance criteria                                                         | Status   |
 | ----- | -------------------------------------------------- | ------------ | --------------------------------------------------------------------------- | -------- |
@@ -97,5 +96,6 @@ owner explicitly approves publication.
 - [x] Create a visual terminal demo GIF of the structured recovery flow.
 - [x] Update README, docs, CLI, and MCP with all five high-level workflows.
 
-Detailed private evidence and competitor tracking remain outside version control. Public release is
-still an explicit owner decision, not an automatic consequence of completing these engineering gates.
+Detailed private evidence and competitor tracking remain outside version control.
+
+| 11 | Public release | 10 | npm publish, public repo, v0.1.0 | Complete |

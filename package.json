@@ -20,6 +20,7 @@
     "benchmark:compare": "node benchmarks/compare-reliability.mjs",
     "release:pack": "pnpm build && node scripts/package-release.mjs",
     "release:smoke": "node scripts/smoke-release.mjs",
+    "release:publish": "pnpm -r --filter './packages/*' publish --access public",
     "audit:prod": "pnpm audit --prod",
     "check:sizes": "pnpm build && node scripts/check-package-sizes.mjs",
     "test:watch": "vitest",

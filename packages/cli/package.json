@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-cli",
-  "version": "0.0.11",
+  "version": "0.1.0",
   "description": "JSON-first CLI for deterministic, verified media workflows.",
   "keywords": [
     "media",
@@ -31,6 +31,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@hadialmarzooq/agent-media-core": "workspace:*",
     "@hadialmarzooq/agent-media-ffmpeg": "workspace:*",

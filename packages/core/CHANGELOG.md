@@ -1,5 +1,11 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.1.0
+
+### Minor Changes
+
+- Initial public release. Five verified workflows (makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame), versioned Media IR v1, structured verification, monotonic progress, 13-scenario reliability corpus, CLI and MCP adapters, automated release pipeline with artifact validation.
+
 ## 0.0.9
 
 ### Patch Changes
