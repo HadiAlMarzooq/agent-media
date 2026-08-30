@@ -9,7 +9,10 @@ Agent Media is a deterministic media transformation runtime for software agents.
 - `@hadialmarzooq/agent-media-ffmpeg` is the initial execution backend.
 - `agent-media` emits JSON for inspect, plan, execute, verify and capabilities.
 - CLI workflows: vertical, optimize, normalize, extract-audio, extract-frame; all accept --progress.
-- `agent-media-mcp` exposes eleven tools over stdio, including all six workflows.
+- `agent-media-mcp` exposes fifteen tools over stdio, including all six workflows.
+- `validate_plan` / `repair_plan` detect and mechanically repair stale plans against a real source.
+- Every execution can emit a durable receipt; `resume` skips re-encoding when a passing receipt matches.
+- `agent-media schema` and the `get_media_plan_schema` tool return the canonical JSON Schema generated from the Zod models.
 - All workflows return source metadata, portable plan, serialized plan, output metadata, and verification.
 - SDK progress callbacks are monotonic; MCP uses protocol-native progress notifications.
 - Inspect plans before execution and verify outputs afterward.

@@ -11,6 +11,10 @@ import {
   planMedia,
   serializePlan,
   verifyMedia,
+  inspectPlanIssues,
+  repairPlan,
+  parseReceipt,
+  mediaPlanSchemaId,
 } from '@hadialmarzooq/agent-media-core';
 import {
   executePlan,
@@ -218,11 +222,48 @@ export function createProgram(): Command {
       );
     });
   program
+    .command('validate-plan <plan>')
+    .description('Detect mechanical plan issues against a real source without executing.')
+    .action(async (planPath) => {
+      const plan = parsePlan(await readFile(planPath, 'utf8'));
+      const source = await inspectMedia(plan.source.path);
+      print({ issues: inspectPlanIssues(plan, source) });
+    });
+  program
+    .command('repair-plan <plan>')
+    .description('Repair mechanical plan issues and write the repaired plan.')
+    .requiredOption('--out <path>', 'write the repaired plan JSON to a file')
+    .action(async (planPath, options) => {
+      const plan = parsePlan(await readFile(planPath, 'utf8'));
+      const source = await inspectMedia(plan.source.path);
+      const { plan: repaired, repairs } = repairPlan(plan, source);
+      await writeFile(options.out, `${serializePlan(repaired)}\n`, 'utf8');
+      print({ repairs, repairedPlan: repaired });
+    });
+  program
+    .command('receipt <path>')
+    .description('Inspect a saved execution receipt.')
+    .action(async (receiptPath) => {
+      print(parseReceipt(await readFile(receiptPath, 'utf8')));
+    });
+  program
+    .command('schema')
+    .description('Print the canonical Media Plan JSON Schema.')
+    .action(async () => {
+      const { mediaPlanJsonSchema } = await import('@hadialmarzooq/agent-media-core');
+      print({ $id: mediaPlanSchemaId, ...mediaPlanJsonSchema });
+    });
+  program
     .command('execute <plan>')
     .description('Execute a saved plan.')
     .requiredOption('--output <path>', 'output media path')
     .option('--overwrite', 'allow output replacement')
     .option('--progress', 'write NDJSON progress events to stderr')
+    .option('--write-receipt', 'write a durable receipt to <output>.receipt.json')
+    .option(
+      '--resume',
+      'skip execution when a passing receipt exists for the same plan and unchanged source',
+    )
     .action(async (planPath, options) => {
       const plan = parsePlan(await readFile(planPath, 'utf8'));
       const onProgress = progressWriter(Boolean(options.progress));
@@ -230,9 +271,12 @@ export function createProgram(): Command {
         output: options.output,
         overwrite: options.overwrite,
         ...(onProgress === undefined ? {} : { onProgress }),
+        ...(options.writeReceipt === undefined ? {} : { writeReceipt: options.writeReceipt }),
+        ...(options.resume === undefined ? {} : { resume: options.resume }),
       });
       print({
         output: result.output,
+        ...(result.resumed === undefined ? {} : { resumed: result.resumed }),
         verification: verifyMedia(await inspectMedia(result.output), plan.expectations),
       });
     });

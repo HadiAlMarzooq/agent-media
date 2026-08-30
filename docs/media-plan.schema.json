@@ -1,165 +1,285 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agent-media.local/schemas/media-plan-v1.json",
+  "$id": "https://raw.githubusercontent.com/HadiAlMarzooq/agent-media/main/docs/media-plan.schema.json",
   "title": "Agent Media Plan v1",
+  "description": "Generated from the canonical Zod Media IR models. Do not edit by hand; regenerate with `node scripts/generate-schema.mjs`.",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["irVersion", "source", "constraints", "steps", "expectations"],
   "properties": {
-    "irVersion": { "const": "1" },
+    "irVersion": {
+      "type": "string",
+      "const": "1"
+    },
     "source": {
       "type": "object",
-      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
       "required": ["path"],
-      "properties": { "path": { "type": "string", "minLength": 1 } }
+      "additionalProperties": false
     },
     "constraints": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "maxSizeMB": { "type": "number", "exclusiveMinimum": 0 },
-        "compatibility": { "enum": ["high", "balanced"] },
-        "quality": { "enum": ["high", "balanced", "small"] }
-      }
+        "maxSizeMB": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "compatibility": {
+          "type": "string",
+          "enum": ["high", "balanced"]
+        },
+        "quality": {
+          "type": "string",
+          "enum": ["high", "balanced", "small"]
+        }
+      },
+      "additionalProperties": false
     },
     "steps": {
       "type": "array",
       "items": {
         "oneOf": [
-          { "$ref": "#/$defs/trim" },
-          { "$ref": "#/$defs/reframe" },
-          { "$ref": "#/$defs/resize" },
-          { "$ref": "#/$defs/encode" },
-          { "$ref": "#/$defs/extractAudio" },
-          { "$ref": "#/$defs/extractFrame" },
-          { "$ref": "#/$defs/concatenate" }
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "trim"
+              },
+              "startSeconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "endSeconds": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": ["id", "reason", "operation", "startSeconds"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "reframe"
+              },
+              "aspectRatio": {
+                "type": "string",
+                "pattern": "^[1-9]\\d*:[1-9]\\d*$"
+              },
+              "strategy": {
+                "default": "center",
+                "type": "string",
+                "enum": ["center"]
+              }
+            },
+            "required": ["id", "reason", "operation", "aspectRatio", "strategy"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "resize"
+              },
+              "width": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "height": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["id", "reason", "operation", "width", "height"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "encode"
+              },
+              "profile": {
+                "type": "string",
+                "enum": ["high-compatibility", "balanced", "high-quality"]
+              },
+              "maxSizeMB": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": ["id", "reason", "operation", "profile"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "extract-audio"
+              },
+              "format": {
+                "default": "m4a",
+                "type": "string",
+                "enum": ["m4a", "mp3", "wav"]
+              }
+            },
+            "required": ["id", "reason", "operation", "format"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "extract-frame"
+              },
+              "atSeconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "format": {
+                "default": "jpg",
+                "type": "string",
+                "enum": ["jpg", "png"]
+              }
+            },
+            "required": ["id", "reason", "operation", "atSeconds", "format"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operation": {
+                "type": "string",
+                "const": "concatenate"
+              },
+              "inputs": {
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": ["id", "reason", "operation", "inputs"],
+            "additionalProperties": false
+          }
         ]
       }
     },
     "expectations": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
-        "aspectRatio": { "$ref": "#/$defs/aspectRatio" },
-        "width": { "type": "integer", "minimum": 1 },
-        "height": { "type": "integer", "minimum": 1 },
-        "maxSizeBytes": { "type": "number", "exclusiveMinimum": 0 },
-        "audio": { "enum": ["preserve", "remove", "required"] },
-        "container": { "type": "string", "minLength": 1 },
-        "videoCodec": { "type": "string", "minLength": 1 },
-        "pixelFormat": { "type": "string", "minLength": 1 }
-      }
-    }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "steps": {
-            "contains": {
-              "type": "object",
-              "properties": {
-                "operation": { "enum": ["extract-audio", "extract-frame", "concatenate"] }
-              },
-              "required": ["operation"]
-            }
-          }
+        "durationSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "aspectRatio": {
+          "type": "string",
+          "pattern": "^[1-9]\\d*:[1-9]\\d*$"
+        },
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxSizeBytes": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "audio": {
+          "type": "string",
+          "enum": ["preserve", "remove", "required"]
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1
+        },
+        "videoCodec": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pixelFormat": {
+          "type": "string",
+          "minLength": 1
         }
       },
-      "then": { "properties": { "steps": { "maxItems": 1 } } }
+      "additionalProperties": false
     }
-  ],
-  "$defs": {
-    "aspectRatio": {
-      "type": "string",
-      "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
-    },
-    "trim": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "startSeconds"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "trim" },
-        "reason": { "type": "string", "minLength": 1 },
-        "startSeconds": { "type": "number", "minimum": 0 },
-        "endSeconds": { "type": "number", "exclusiveMinimum": 0 }
-      }
-    },
-    "reframe": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "aspectRatio", "strategy"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "reframe" },
-        "reason": { "type": "string", "minLength": 1 },
-        "aspectRatio": { "$ref": "#/$defs/aspectRatio" },
-        "strategy": { "const": "center" }
-      }
-    },
-    "resize": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "width", "height"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "resize" },
-        "reason": { "type": "string", "minLength": 1 },
-        "width": { "type": "integer", "minimum": 1 },
-        "height": { "type": "integer", "minimum": 1 }
-      }
-    },
-    "encode": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "profile"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "encode" },
-        "reason": { "type": "string", "minLength": 1 },
-        "profile": { "enum": ["high-compatibility", "balanced", "high-quality"] },
-        "maxSizeMB": { "type": "number", "exclusiveMinimum": 0 }
-      }
-    },
-    "extractAudio": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "format"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "extract-audio" },
-        "reason": { "type": "string", "minLength": 1 },
-        "format": { "enum": ["m4a", "mp3", "wav"] }
-      }
-    },
-    "extractFrame": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "atSeconds", "format"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "extract-frame" },
-        "reason": { "type": "string", "minLength": 1 },
-        "atSeconds": { "type": "number", "minimum": 0 },
-        "format": { "enum": ["jpg", "png"] }
-      }
-    },
-    "concatenate": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "operation", "reason", "inputs"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "operation": { "const": "concatenate" },
-        "reason": { "type": "string", "minLength": 1 },
-        "inputs": {
-          "type": "array",
-          "minItems": 2,
-          "items": { "type": "string", "minLength": 1 }
-        }
-      }
-    }
-  }
+  },
+  "required": ["irVersion", "source", "constraints", "steps", "expectations"],
+  "additionalProperties": false
 }

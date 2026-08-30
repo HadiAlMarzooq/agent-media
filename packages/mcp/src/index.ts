@@ -11,6 +11,10 @@ import {
   planMedia,
   validatePlan,
   verifyMedia,
+  inspectPlanIssues,
+  repairPlan,
+  parseReceipt,
+  mediaPlanSchemaId,
 } from '@hadialmarzooq/agent-media-core';
 import type { MediaGoals, MediaPlan } from '@hadialmarzooq/agent-media-core';
 import {
@@ -107,6 +111,52 @@ export function createMcpServer(): McpServer {
           capabilities: await getCapabilities(),
         }),
       })),
+  );
+  server.registerTool(
+    'validate_plan',
+    {
+      description:
+        'Detect mechanical plan issues (impossible trims, dimension conflicts, out-of-range timestamps) against a real source without executing. Read-only.',
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+      },
+      annotations: readOnlyHint,
+    },
+    async ({ plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        return { issues: inspectPlanIssues(plan, await inspectMedia(plan.source.path)) };
+      }),
+  );
+  server.registerTool(
+    'repair_plan',
+    {
+      description:
+        'Repair mechanical plan issues (clamp trims and timestamps into source duration, reconcile resize with aspect ratio) and return the repaired plan with a structured repair report.',
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+      },
+      annotations: readOnlyHint,
+    },
+    async ({ plan: input }) =>
+      safely(async () => {
+        const plan = normalizePlan(input);
+        const { plan: repaired, repairs } = repairPlan(plan, await inspectMedia(plan.source.path));
+        return { repairs, repairedPlan: repaired };
+      }),
+  );
+  server.registerTool(
+    'get_media_plan_schema',
+    {
+      description:
+        'Return the canonical Media Plan JSON Schema generated from the runtime models, so agent tooling cannot drift.',
+      annotations: readOnlyHint,
+    },
+    async () =>
+      safely(async () => {
+        const { mediaPlanJsonSchema } = await import('@hadialmarzooq/agent-media-core');
+        return { $id: mediaPlanSchemaId, schema: mediaPlanJsonSchema };
+      }),
   );
   server.registerTool(
     'make_vertical',
@@ -330,32 +380,48 @@ export function createMcpServer(): McpServer {
     'execute_media_plan',
     {
       description:
-        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Overwrite is destructive.',
+        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Overwrite is destructive. Set writeReceipt to emit a durable receipt, or resume to skip execution when a passing receipt already matches the plan and source.',
       inputSchema: {
         plan: z.union([z.string().min(1), planRefSchema]),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
+        writeReceipt: z.boolean().optional(),
+        resume: z.boolean().optional(),
       },
       annotations: destructiveHint,
     },
-    async ({ plan: input, output, overwrite }, extra) => {
+    async ({ plan: input, output, overwrite, writeReceipt, resume }, extra) => {
       const notifications = mcpProgress(extra);
       const response = await safely(async () => {
         const plan = normalizePlan(input);
         const execution = await executePlan(plan, {
           output,
           ...(overwrite === undefined ? {} : { overwrite }),
+          ...(writeReceipt === undefined ? {} : { writeReceipt }),
+          ...(resume === undefined ? {} : { resume }),
           signal: extra.signal,
           onProgress: notifications.notify,
         });
         return {
           output: execution.output,
+          ...(execution.resumed === undefined ? {} : { resumed: execution.resumed }),
+          ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
           verification: verifyMedia(await inspectMedia(execution.output), plan.expectations),
         };
       });
       await notifications.drain();
       return response;
     },
+  );
+  server.registerTool(
+    'inspect_receipt',
+    {
+      description:
+        'Validate and inspect a saved execution receipt (durable record of plan, source fingerprint, output, and verification).',
+      inputSchema: { receipt: z.string().min(1) },
+      annotations: readOnlyHint,
+    },
+    async ({ receipt }) => safely(async () => parseReceipt(receipt)),
   );
   server.registerTool(
     'verify_media',

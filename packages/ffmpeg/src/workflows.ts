@@ -1,5 +1,10 @@
 import { MediaError, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
-import type { MediaMetadata, MediaPlan, VerificationReport } from '@hadialmarzooq/agent-media-core';
+import type {
+  ExecutionReceipt,
+  MediaMetadata,
+  MediaPlan,
+  VerificationReport,
+} from '@hadialmarzooq/agent-media-core';
 
 import { executePlan, type ExecuteOptions } from './executor.js';
 import { getCapabilities } from './capabilities.js';
@@ -13,6 +18,13 @@ export interface WorkflowOptions extends FfmpegOptions {
   allowedOutputDirectory?: string;
   signal?: AbortSignal;
   onProgress?: ProgressCallback;
+  /** Write a durable receipt to `${output}.receipt.json` after execution. */
+  writeReceipt?: boolean;
+  /**
+   * Idempotent resume: skip execution when a passing receipt exists for the
+   * same plan and unchanged source, and return the recorded output.
+   */
+  resume?: boolean;
 }
 
 export interface MakeVerticalOptions extends WorkflowOptions {
@@ -59,6 +71,10 @@ export interface WorkflowResult {
   serializedPlan: string;
   output: MediaMetadata;
   verification: VerificationReport;
+  /** Durable execution receipt, present when execution completed. */
+  receipt?: ExecutionReceipt;
+  /** True when execution was skipped because a passing receipt matched. */
+  resumed?: boolean;
 }
 
 /**
@@ -229,6 +245,8 @@ async function executeAndVerify(
       ? {}
       : { allowedOutputDirectory: options.allowedOutputDirectory }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.writeReceipt === undefined ? {} : { writeReceipt: options.writeReceipt }),
+    ...(options.resume === undefined ? {} : { resume: options.resume }),
     onProgress: (progress) => {
       const percent = 20 + Math.round(progress.percent * 0.7);
       safelyNotify(options.onProgress, { ...progress, percent });
@@ -249,7 +267,15 @@ async function executeAndVerify(
   }
   emit(options.onProgress, 'completed', 100, completionMessage);
   const serializedPlan = serializePlan(plan);
-  return { source, plan, serializedPlan, output, verification };
+  return {
+    source,
+    plan,
+    serializedPlan,
+    output,
+    verification,
+    ...(execution.receipt === undefined ? {} : { receipt: execution.receipt }),
+    ...(execution.resumed === undefined ? {} : { resumed: execution.resumed }),
+  };
 }
 
 function emit(

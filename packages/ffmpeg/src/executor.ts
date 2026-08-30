@@ -1,8 +1,20 @@
-import { access, constants, rm } from 'node:fs/promises';
+import { access, constants, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 
-import { MediaError, validatePlan } from '@hadialmarzooq/agent-media-core';
-import type { MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
+import {
+  MediaError,
+  buildReceipt,
+  parseReceipt,
+  receiptMatches,
+  validatePlan,
+  verifyMedia,
+} from '@hadialmarzooq/agent-media-core';
+import type {
+  ExecutionReceipt,
+  MediaMetadata,
+  MediaPlan,
+  SourceFingerprint,
+} from '@hadialmarzooq/agent-media-core';
 
 import { compilePlan, extensionForPlan, type CompiledOperation } from './compiler.js';
 import { inspectMedia, type FfmpegOptions } from './inspect.js';
@@ -16,11 +28,20 @@ export interface ExecuteOptions extends FfmpegOptions {
   allowedOutputDirectory?: string;
   signal?: AbortSignal;
   onProgress?: ProgressCallback;
+  /** Write a durable receipt to `${output}.receipt.json` after execution. */
+  writeReceipt?: boolean;
+  /**
+   * Idempotent resume: if a passing receipt exists for the same plan and
+   * unchanged source, skip re-execution and return the recorded output.
+   */
+  resume?: boolean;
 }
 
 export interface ExecutionResult {
   output: string;
   operation: CompiledOperation;
+  receipt?: ExecutionReceipt;
+  resumed?: boolean;
 }
 
 export async function executePlan(
@@ -61,6 +82,26 @@ async function executePlanInternal(
       suggestedActions: ['Choose a path within the configured output directory.'],
     });
   }
+  const sourceMetadata =
+    options.sourceMetadata ??
+    (await inspectMedia(plan.source.path, {
+      ...(options.ffprobePath === undefined ? {} : { ffprobePath: options.ffprobePath }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    }));
+  if (resolve(sourceMetadata.path) !== resolve(plan.source.path)) {
+    throw new MediaError({
+      code: 'INVALID_PLAN',
+      message: 'Source metadata does not describe the Media Plan source.',
+      context: { planSource: plan.source.path, metadataSource: sourceMetadata.path },
+      suggestedActions: ['Inspect the planned source and pass that metadata to executePlan.'],
+    });
+  }
+  // Resume short-circuits the collision check: a matching receipt means this
+  // call will not write anything, so an existing output is the expected state.
+  if (options.resume) {
+    const resumed = await tryResume(plan, sourceMetadata, output);
+    if (resumed !== undefined) return resumed;
+  }
   if (!options.overwrite && (await exists(output))) {
     throw new MediaError({
       code: 'OUTPUT_EXISTS',
@@ -86,20 +127,6 @@ async function executePlanInternal(
       message: `The output extension "${actualExt}" does not match the plan's expected "${expectedExt}".`,
       context: { output, expectedExtension: expectedExt, actualExtension: actualExt },
       suggestedActions: [`Use a "${expectedExt}" output extension, or adjust the plan.`],
-    });
-  }
-  const sourceMetadata =
-    options.sourceMetadata ??
-    (await inspectMedia(plan.source.path, {
-      ...(options.ffprobePath === undefined ? {} : { ffprobePath: options.ffprobePath }),
-      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-    }));
-  if (resolve(sourceMetadata.path) !== resolve(plan.source.path)) {
-    throw new MediaError({
-      code: 'INVALID_PLAN',
-      message: 'Source metadata does not describe the Media Plan source.',
-      context: { planSource: plan.source.path, metadataSource: sourceMetadata.path },
-      suggestedActions: ['Inspect the planned source and pass that metadata to executePlan.'],
     });
   }
   await preflightConcatenation(plan, sourceMetadata, options);
@@ -159,7 +186,61 @@ async function executePlanInternal(
     });
   }
   progress.complete();
-  return { output, operation };
+  const executedOutput = await inspectMedia(output, {
+    ...(options.ffprobePath === undefined ? {} : { ffprobePath: options.ffprobePath }),
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+  });
+  const receipt = buildReceipt({
+    plan,
+    source: fingerprintOf(sourceMetadata),
+    backend: { name: 'ffmpeg' },
+    output: {
+      path: output,
+      sizeBytes: executedOutput.sizeBytes,
+      ...(executedOutput.durationSeconds === undefined
+        ? {}
+        : { durationSeconds: executedOutput.durationSeconds }),
+    },
+    executedSteps: plan.steps.map((step) => step.id),
+    verification: verifyMedia(executedOutput, plan.expectations),
+  });
+  if (options.writeReceipt) {
+    await writeFile(receiptPath(output), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+  }
+  return { output, operation, receipt };
+}
+
+async function tryResume(
+  plan: MediaPlan,
+  sourceMetadata: MediaMetadata,
+  output: string,
+): Promise<ExecutionResult | undefined> {
+  const receiptFile = receiptPath(output);
+  if (!(await exists(receiptFile))) return undefined;
+  if (!(await exists(output))) return undefined;
+  let receipt: ExecutionReceipt;
+  try {
+    receipt = parseReceipt(await readFile(receiptFile, 'utf8'));
+  } catch {
+    return undefined;
+  }
+  if (!receiptMatches(receipt, plan, fingerprintOf(sourceMetadata))) return undefined;
+  const operation = compilePlan(plan, sourceMetadata, output);
+  return { output, operation, receipt, resumed: true };
+}
+
+function receiptPath(output: string): string {
+  return `${output}.receipt.json`;
+}
+
+function fingerprintOf(source: MediaMetadata): SourceFingerprint {
+  return {
+    path: source.path,
+    sizeBytes: source.sizeBytes,
+    ...(source.durationSeconds === undefined ? {} : { durationSeconds: source.durationSeconds }),
+    ...(source.container === undefined ? {} : { container: source.container }),
+    ...(source.video?.codec === undefined ? {} : { videoCodec: source.video.codec }),
+  };
 }
 
 function progressArgs(args: readonly string[]): string[] {

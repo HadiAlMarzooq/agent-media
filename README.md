@@ -151,7 +151,12 @@ agent-media extract-audio demo.mp4 --output audio.m4a
 agent-media extract-frame demo.mp4 --output frame.jpg --at 2
 agent-media concatenate demo.mp4 --inputs clip2.mp4 clip3.mp4 --output joined.mp4 --progress
 agent-media plan demo.mp4 --aspect 9:16 --max-size 25 --out plan.json
-agent-media execute plan.json --output replay.mp4 --progress
+agent-media validate-plan plan.json
+agent-media repair-plan plan.json --out repaired.json
+agent-media execute plan.json --output replay.mp4 --write-receipt --progress
+agent-media execute plan.json --output replay.mp4 --resume
+agent-media receipt replay.mp4.receipt.json
+agent-media schema
 agent-media verify replay.mp4 --against plan.json
 agent-media capabilities
 ```
@@ -161,22 +166,30 @@ recovery actions.
 
 ## MCP
 
-Run `agent-media-mcp` over stdio. It exposes eleven semantic tools:
+Run `agent-media-mcp` over stdio. It exposes fifteen semantic tools:
 
 - `inspect_media` (read-only)
 - `get_media_capabilities` (read-only)
 - `plan_media` (read-only)
+- `validate_plan` (read-only) — detect mechanical plan issues against a real source
+- `repair_plan` (read-only) — clamp and reconcile plans with a structured repair report
+- `get_media_plan_schema` (read-only) — canonical JSON Schema generated from the runtime
 - `make_vertical`
 - `optimize_for_web`
 - `normalize_media`
 - `extract_audio`
 - `extract_frame`
 - `concatenate_media`
-- `execute_media_plan`
+- `execute_media_plan` — supports `writeReceipt` and idempotent `resume`
+- `inspect_receipt` (read-only)
 - `verify_media` (read-only)
 
 Read-only tools are annotated with `readOnlyHint`; writer tools with `destructiveHint` so clients
 like Claude Code can distinguish safe inspections from overwrite-capable calls.
+
+Every execution can emit a durable receipt (`${output}.receipt.json`) recording the plan, source
+fingerprint, executed steps, output metadata, verification report, and any failure state. With
+`resume`, a passing receipt for the same plan and unchanged source skips re-encoding entirely.
 
 `make_vertical`, `optimize_for_web`, `normalize_media`, `extract_audio`, `extract_frame`, and
 `execute_media_plan` send standard MCP progress notifications when the client requests progress.

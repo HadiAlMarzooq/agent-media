@@ -23,6 +23,7 @@
     "release:publish": "pnpm -r --filter './packages/*' publish --access public",
     "audit:prod": "pnpm audit --prod",
     "check:sizes": "pnpm build && node scripts/check-package-sizes.mjs",
+    "generate:schema": "pnpm --filter @hadialmarzooq/agent-media-core build && node scripts/generate-schema.mjs",
     "test:watch": "vitest",
     "changeset": "changeset",
     "version-packages": "changeset version"

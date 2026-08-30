@@ -410,4 +410,73 @@ describe('execution', () => {
       });
     }
   });
+
+  it('writes a durable receipt and resumes idempotently from it', async () => {
+    const output = join(directory, 'receipt.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    const first = await executePlan(plan, {
+      output,
+      sourceMetadata: metadata,
+      writeReceipt: true,
+    });
+
+    expect(first.receipt).toMatchObject({
+      receiptVersion: '1',
+      verification: { passed: true },
+    });
+    await expect(accessFile(output + '.receipt.json')).resolves.toBe(true);
+
+    const second = await executePlan(plan, {
+      output,
+      sourceMetadata: metadata,
+      resume: true,
+    });
+    expect(second.resumed).toBe(true);
+    expect(second.receipt?.planFingerprint).toBe(first.receipt?.planFingerprint);
+  });
+
+  it('does not resume when the source changed', async () => {
+    const output = join(directory, 'resume-drift.mp4');
+    const plan = planMedia({
+      source: metadata,
+      goals: { compatibility: 'high', durationSeconds: 1 },
+    });
+    await executePlan(plan, { output, sourceMetadata: metadata, writeReceipt: true });
+
+    const drifted: typeof metadata = { ...metadata, sizeBytes: metadata.sizeBytes + 1 };
+    const rerun = await executePlan(plan, {
+      output,
+      sourceMetadata: drifted,
+      overwrite: true,
+      resume: true,
+    });
+    expect(rerun.resumed).toBeUndefined();
+  });
+
+  it('runs a workflow with writeReceipt and returns the receipt', async () => {
+    const output = join(directory, 'workflow-receipt.mp4');
+    const result = await makeVertical({
+      input: fixture,
+      output,
+      width: 180,
+      height: 320,
+      durationSeconds: 1,
+      writeReceipt: true,
+    });
+    expect(result.receipt).toMatchObject({ receiptVersion: '1', verification: { passed: true } });
+    await expect(accessFile(output + '.receipt.json')).resolves.toBe(true);
+  });
 });
+
+async function accessFile(path: string): Promise<boolean> {
+  const { access, constants } = await import('node:fs/promises');
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
