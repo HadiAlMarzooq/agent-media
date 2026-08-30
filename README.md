@@ -171,18 +171,18 @@ Run `agent-media-mcp` over stdio. It exposes sixteen semantic tools:
 - `inspect_media` (read-only)
 - `get_media_capabilities` (read-only)
 - `plan_media` (read-only)
-- `validate_plan` (read-only)
-- `repair_plan` (read-only)
-- `get_media_plan_schema` (read-only)
+- `validate_plan` (read-only) — detect mechanical plan issues against a real source
+- `repair_plan` (read-only) — clamp and reconcile plans with a structured repair report
+- `get_media_plan_schema` (read-only) — canonical JSON Schema generated from the runtime
 - `make_vertical`
 - `optimize_for_web`
 - `normalize_media`
 - `extract_audio`
 - `extract_frame`
 - `concatenate_media`
-- `execute_media_plan`
-- `resume_execution`
-- `inspect_receipt` (read-only)
+- `execute_media_plan` — supports `writeReceipt` and idempotent `resume`
+- `resume_execution` — continue from a saved receipt
+- `inspect_receipt` (read-only) — validate and read a saved receipt
 - `verify_media` (read-only)
 
 Read-only tools are annotated with `readOnlyHint`; writer tools with `destructiveHint` so clients

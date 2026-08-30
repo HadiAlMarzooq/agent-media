@@ -295,11 +295,18 @@ describe('generated JSON Schema', () => {
     const { readFile } = await import('node:fs/promises');
     const { resolve } = await import('node:path');
     const { mediaPlanSchemaId } = await import('../src/schema.js');
-    const docsPath = resolve(__dirname, '../../../docs/media-plan.schema.json');
-    const published = JSON.parse(await readFile(docsPath, 'utf8'));
-    expect(published.$id).toBe(mediaPlanSchemaId);
-    for (const [key, value] of Object.entries(mediaPlanJsonSchema)) {
-      expect(published[key]).toEqual(value);
+    // Both published copies: the GitHub-hosted docs file the $id resolves to, and the one that
+    // ships inside the package as the ./schema.json export.
+    const publishedPaths = [
+      resolve(__dirname, '../../../docs/media-plan.schema.json'),
+      resolve(__dirname, '../schema/media-plan.schema.json'),
+    ];
+    for (const path of publishedPaths) {
+      const published = JSON.parse(await readFile(path, 'utf8'));
+      expect(published.$id, path).toBe(mediaPlanSchemaId);
+      for (const [key, value] of Object.entries(mediaPlanJsonSchema)) {
+        expect(published[key], `${path}: ${key}`).toEqual(value);
+      }
     }
   });
 });

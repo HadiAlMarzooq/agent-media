@@ -157,7 +157,7 @@ transforms and long-running operations.
       a resume can tell "never executed" from "executed and did not satisfy the plan".
 - [x] CLI and MCP `resume` commands that accept a receipt.
 
-### Phase 15 — Extensible verification
+### Phase 16 — Extensible verification
 
 The verification model should be extensible enough to support content-quality checks beyond
 metadata — not immediately, but the architecture should not block it.
