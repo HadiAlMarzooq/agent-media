@@ -7,7 +7,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   MediaError,
-  mediaPlanSchema,
   parsePlan,
   planMedia,
   validatePlan,
@@ -15,14 +14,15 @@ import {
 } from '@hadialmarzooq/agent-media-core';
 import type { MediaGoals, MediaPlan } from '@hadialmarzooq/agent-media-core';
 import {
+  concatenate,
   executePlan,
+  extractAudio,
+  extractFrame,
   getCapabilities,
   inspectMedia,
   makeVertical,
-  optimizeForWeb,
   normalize,
-  extractAudio,
-  extractFrame,
+  optimizeForWeb,
 } from '@hadialmarzooq/agent-media-ffmpeg';
 import type { MediaProgress } from '@hadialmarzooq/agent-media-ffmpeg';
 import { z } from 'zod';
@@ -30,44 +30,80 @@ import { z } from 'zod';
 const packageVersion = (createRequire(import.meta.url)('../package.json') as { version: string })
   .version;
 
-const goalSchema = z.object({
-  trimStartSeconds: z.number().nonnegative().optional(),
-  durationSeconds: z.number().positive().optional(),
-  aspectRatio: z.string().optional(),
-  width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional(),
-  maxSizeMB: z.number().positive().optional(),
-  compatibility: z.enum(['high', 'balanced']).optional(),
-  quality: z.enum(['high', 'balanced', 'small']).optional(),
-  audio: z.enum(['preserve', 'remove']).optional(),
-});
+const goalSchema = z
+  .object({
+    trimStartSeconds: z.number().nonnegative().optional(),
+    trimEndSeconds: z.number().finite().optional(),
+    durationSeconds: z.number().positive().optional(),
+    aspectRatio: z.string().optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    maxSizeMB: z.number().positive().optional(),
+    compatibility: z.enum(['high', 'balanced']).optional(),
+    quality: z.enum(['high', 'balanced', 'small']).optional(),
+    audio: z.enum(['preserve', 'remove']).optional(),
+    extractAudio: z.object({ format: z.enum(['m4a', 'mp3', 'wav']).optional() }).optional(),
+    extractFrame: z
+      .object({
+        atSeconds: z.number().nonnegative().optional(),
+        format: z.enum(['jpg', 'png']).optional(),
+      })
+      .optional(),
+    concatenate: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .strict();
+
+function validateGoalSchema(goals: z.infer<typeof goalSchema>): z.infer<typeof goalSchema> {
+  if (!Object.values(goals).some((v) => v !== undefined)) {
+    throw new MediaError({
+      code: 'INVALID_PLAN',
+      message: 'At least one goal must be provided. An empty goals object produces a no-op plan.',
+      suggestedActions: ['Provide at least one semantic goal.'],
+    });
+  }
+  return goals;
+}
+
+const planRefSchema = z
+  .object({ irVersion: z.literal('1'), source: z.object({ path: z.string() }) })
+  .passthrough();
+
+const readOnlyHint = { readOnlyHint: true } as const;
+const destructiveHint = { destructiveHint: true } as const;
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({ name: 'agent-media', version: packageVersion });
   server.registerTool(
     'inspect_media',
     {
-      description: 'Inspect normalized media metadata.',
+      description:
+        'Inspect normalized media metadata. Paths resolve against the server working directory; absolute paths are recommended.',
       inputSchema: { input: z.string().min(1) },
+      annotations: readOnlyHint,
     },
     async ({ input }) => safely(async () => inspectMedia(input)),
   );
   server.registerTool(
     'get_media_capabilities',
-    { description: 'Detect local FFmpeg capabilities.' },
+    {
+      description: 'Detect local FFmpeg capabilities.',
+      annotations: readOnlyHint,
+    },
     async () => safely(getCapabilities),
   );
   server.registerTool(
     'plan_media',
     {
-      description: 'Create an inspectable versioned semantic Media IR plan.',
+      description:
+        'Create an inspectable versioned semantic Media IR plan from semantic goals. All goals in the MediaGoals type are accepted.',
       inputSchema: { input: z.string().min(1), goals: goalSchema },
+      annotations: readOnlyHint,
     },
     async ({ input, goals }) =>
       safely(async () => ({
         plan: planMedia({
           source: await inspectMedia(input),
-          goals: cleanGoals(goals),
+          goals: cleanGoals(validateGoalSchema(goals)),
           capabilities: await getCapabilities(),
         }),
       })),
@@ -76,7 +112,7 @@ export function createMcpServer(): McpServer {
     'make_vertical',
     {
       description:
-        'Inspect, plan, execute, and verify a high-compatibility 9:16 video. Reports MCP progress when requested.',
+        'Inspect, plan, execute, and verify a high-compatibility 9:16 video. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
         input: z.string().min(1),
         output: z.string().min(1),
@@ -88,6 +124,7 @@ export function createMcpServer(): McpServer {
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
       },
+      annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
@@ -118,7 +155,7 @@ export function createMcpServer(): McpServer {
     'optimize_for_web',
     {
       description:
-        'Inspect, plan, execute, and verify a web-optimized high-compatibility video. Reports MCP progress when requested.',
+        'Inspect, plan, execute, and verify a web-optimized high-compatibility video. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
         input: z.string().min(1),
         output: z.string().min(1),
@@ -129,6 +166,7 @@ export function createMcpServer(): McpServer {
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
       },
+      annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
@@ -158,7 +196,7 @@ export function createMcpServer(): McpServer {
     'normalize_media',
     {
       description:
-        'Inspect, plan, execute, and verify a normalized high-compatibility copy (H.264, yuv420p, faststart). Reports MCP progress when requested.',
+        'Inspect, plan, execute, and verify a normalized high-compatibility copy (H.264, yuv420p, faststart). Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
         input: z.string().min(1),
         output: z.string().min(1),
@@ -167,6 +205,7 @@ export function createMcpServer(): McpServer {
         audio: z.enum(['preserve', 'remove']).optional(),
         overwrite: z.boolean().optional(),
       },
+      annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
@@ -194,7 +233,7 @@ export function createMcpServer(): McpServer {
     'extract_audio',
     {
       description:
-        'Extract and verify audio from any media source. Reports MCP progress when requested.',
+        'Extract and verify audio from any media source. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
         input: z.string().min(1),
         output: z.string().min(1),
@@ -203,6 +242,7 @@ export function createMcpServer(): McpServer {
         durationSeconds: z.number().positive().optional(),
         overwrite: z.boolean().optional(),
       },
+      annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
@@ -230,7 +270,7 @@ export function createMcpServer(): McpServer {
     'extract_frame',
     {
       description:
-        'Extract and verify a still frame from a video source. Reports MCP progress when requested.',
+        'Extract and verify a still frame from a video source. The timestamp must be within the source duration. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
         input: z.string().min(1),
         output: z.string().min(1),
@@ -238,6 +278,7 @@ export function createMcpServer(): McpServer {
         format: z.enum(['jpg', 'png']).optional(),
         overwrite: z.boolean().optional(),
       },
+      annotations: destructiveHint,
     },
     async (options, extra) => {
       const notifications = mcpProgress(extra);
@@ -257,14 +298,45 @@ export function createMcpServer(): McpServer {
     },
   );
   server.registerTool(
-    'execute_media_plan',
+    'concatenate_media',
     {
-      description: 'Execute a serialized semantic Media IR plan.',
+      description:
+        'Concatenate multiple media sources into a single verified output. All inputs must have compatible stream layouts. Reports MCP progress when requested. Overwrite is destructive.',
       inputSchema: {
-        plan: z.union([z.string().min(1), mediaPlanSchema]),
+        input: z.string().min(1),
+        inputs: z.array(z.string().min(1)).min(1),
         output: z.string().min(1),
         overwrite: z.boolean().optional(),
       },
+      annotations: destructiveHint,
+    },
+    async (options, extra) => {
+      const notifications = mcpProgress(extra);
+      const response = await safely(async () =>
+        concatenate({
+          input: options.input,
+          inputs: options.inputs,
+          output: options.output,
+          ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+          signal: extra.signal,
+          onProgress: notifications.notify,
+        }),
+      );
+      await notifications.drain();
+      return response;
+    },
+  );
+  server.registerTool(
+    'execute_media_plan',
+    {
+      description:
+        'Execute a serialized semantic Media IR plan. Accepts a plan object or JSON string. Overwrite is destructive.',
+      inputSchema: {
+        plan: z.union([z.string().min(1), planRefSchema]),
+        output: z.string().min(1),
+        overwrite: z.boolean().optional(),
+      },
+      annotations: destructiveHint,
     },
     async ({ plan: input, output, overwrite }, extra) => {
       const notifications = mcpProgress(extra);
@@ -288,11 +360,13 @@ export function createMcpServer(): McpServer {
   server.registerTool(
     'verify_media',
     {
-      description: 'Verify output media against a serialized semantic Media IR plan.',
+      description:
+        'Verify output media against a serialized semantic Media IR plan. Accepts a plan object or JSON string.',
       inputSchema: {
         output: z.string().min(1),
-        plan: z.union([z.string().min(1), mediaPlanSchema]),
+        plan: z.union([z.string().min(1), planRefSchema]),
       },
+      annotations: readOnlyHint,
     },
     async ({ output, plan: input }) =>
       safely(async () => {
@@ -322,7 +396,7 @@ async function safely(operation: () => Promise<unknown>) {
   }
 }
 
-function normalizePlan(input: string | MediaPlan): MediaPlan {
+function normalizePlan(input: string | Record<string, unknown>): MediaPlan {
   return typeof input === 'string' ? parsePlan(input) : validatePlan(input);
 }
 

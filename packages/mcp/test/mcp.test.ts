@@ -152,6 +152,120 @@ describe('MCP adapter', () => {
       await server.close();
     }
   });
+
+  it('rejects unknown goal keys with a validation error', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const response = await client.callTool({
+        name: 'plan_media',
+        arguments: { input: fixture, goals: { bogus: true } },
+      });
+      expect(response.isError).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('rejects an empty goals object', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const response = await client.callTool({
+        name: 'plan_media',
+        arguments: { input: fixture, goals: {} },
+      });
+      expect(response.isError).toBe(true);
+      expect(parseToolResult(response)).toMatchObject({ code: 'INVALID_PLAN' });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('exposes the concatenate_media tool and produces a longer output', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-concat-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const output = join(directory, 'mcp-concat.mp4');
+      const response = await client.callTool({
+        name: 'concatenate_media',
+        arguments: { input: fixture, inputs: [fixture], output, overwrite: true },
+      });
+      const result = parseToolResult(response) as {
+        output: { durationSeconds?: number };
+        verification: { passed: boolean };
+      };
+      expect(result.output.durationSeconds).toBeGreaterThan(3.5);
+      expect(result.verification.passed).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('registers eleven semantic tools', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.length).toBe(11);
+      expect(tools.map((t) => t.name)).toEqual(
+        expect.arrayContaining([
+          'inspect_media',
+          'get_media_capabilities',
+          'plan_media',
+          'make_vertical',
+          'optimize_for_web',
+          'normalize_media',
+          'extract_audio',
+          'extract_frame',
+          'concatenate_media',
+          'execute_media_plan',
+          'verify_media',
+        ]),
+      );
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('sets readOnlyHint on read-only tools', async () => {
+    const server = createMcpServer();
+    const client = new Client({ name: 'agent-media-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const { tools } = await client.listTools();
+      const inspect = tools.find((t) => t.name === 'inspect_media');
+      const vertical = tools.find((t) => t.name === 'make_vertical');
+      expect(inspect?.annotations?.readOnlyHint).toBe(true);
+      expect(vertical?.annotations?.destructiveHint).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
 });
 
 function parseToolResult(response: unknown): unknown {

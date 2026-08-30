@@ -1,10 +1,10 @@
 import { access, constants, rm } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, extname, relative, resolve } from 'node:path';
 
 import { MediaError, validatePlan } from '@hadialmarzooq/agent-media-core';
 import type { MediaMetadata, MediaPlan } from '@hadialmarzooq/agent-media-core';
 
-import { compilePlan, type CompiledOperation } from './compiler.js';
+import { compilePlan, extensionForPlan, type CompiledOperation } from './compiler.js';
 import { inspectMedia, type FfmpegOptions } from './inspect.js';
 import { createExecutionProgressReporter, type ProgressCallback } from './progress.js';
 import { runProcess } from './process.js';
@@ -29,6 +29,19 @@ export async function executePlan(
 ): Promise<ExecutionResult> {
   const plan = validatePlan(planInput);
   const output = resolve(options.output);
+  const release = await acquireOutputLock(output);
+  try {
+    return await executePlanInternal(plan, options, output);
+  } finally {
+    releaseOutputLock(output, release);
+  }
+}
+
+async function executePlanInternal(
+  plan: MediaPlan,
+  options: ExecuteOptions,
+  output: string,
+): Promise<ExecutionResult> {
   if (output === resolve(plan.source.path)) {
     throw new MediaError({
       code: 'PATH_NOT_ALLOWED',
@@ -54,6 +67,25 @@ export async function executePlan(
       message: 'The output path already exists.',
       context: { output },
       suggestedActions: ['Choose a different output path or explicitly enable overwrite.'],
+    });
+  }
+  const outputDir = dirname(output);
+  if (!(await exists(outputDir))) {
+    throw new MediaError({
+      code: 'OUTPUT_DIR_MISSING',
+      message: 'The output directory does not exist.',
+      context: { output, directory: outputDir },
+      suggestedActions: ['Create the output directory before execution.'],
+    });
+  }
+  const expectedExt = extensionForPlan(plan);
+  const actualExt = extname(output);
+  if (expectedExt && actualExt && expectedExt !== actualExt) {
+    throw new MediaError({
+      code: 'OUTPUT_EXTENSION_MISMATCH',
+      message: `The output extension "${actualExt}" does not match the plan's expected "${expectedExt}".`,
+      context: { output, expectedExtension: expectedExt, actualExtension: actualExt },
+      suggestedActions: [`Use a "${expectedExt}" output extension, or adjust the plan.`],
     });
   }
   const sourceMetadata =
@@ -243,4 +275,25 @@ async function exists(path: string): Promise<boolean> {
 function isWithin(path: string, directory: string): boolean {
   const pathRelative = relative(directory, path);
   return pathRelative === '' || (!pathRelative.startsWith('..') && !pathRelative.includes('..\\'));
+}
+
+const outputLocks = new Map<string, Promise<void>>();
+
+async function acquireOutputLock(output: string): Promise<() => void> {
+  const prev = outputLocks.get(output) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  outputLocks.set(
+    output,
+    prev.then(() => next),
+  );
+  await prev;
+  return release;
+}
+
+function releaseOutputLock(output: string, release: () => void): void {
+  release();
+  outputLocks.delete(output);
 }

@@ -4,12 +4,12 @@ Agent Media is a deterministic media transformation runtime for software agents.
 
 - Pipeline: inspect → plan → versioned Media IR → execute → verify.
 - Use semantic goals rather than FFmpeg flags.
-- Five high-level workflows: makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame.
+- Six high-level workflows: makeVertical, optimizeForWeb, normalize, extractAudio, extractFrame, concatenate.
 - `@hadialmarzooq/agent-media-core` is protocol-independent and does not depend on MCP.
 - `@hadialmarzooq/agent-media-ffmpeg` is the initial execution backend.
 - `agent-media` emits JSON for inspect, plan, execute, verify and capabilities.
 - CLI workflows: vertical, optimize, normalize, extract-audio, extract-frame; all accept --progress.
-- `agent-media-mcp` exposes ten tools over stdio, including all five workflows.
+- `agent-media-mcp` exposes eleven tools over stdio, including all six workflows.
 - All workflows return source metadata, portable plan, serialized plan, output metadata, and verification.
 - SDK progress callbacks are monotonic; MCP uses protocol-native progress notifications.
 - Inspect plans before execution and verify outputs afterward.

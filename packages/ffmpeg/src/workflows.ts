@@ -49,6 +49,10 @@ export interface ExtractFrameOptions extends WorkflowOptions {
   format?: 'jpg' | 'png';
 }
 
+export interface ConcatenateOptions extends WorkflowOptions {
+  inputs: string[];
+}
+
 export interface WorkflowResult {
   source: MediaMetadata;
   plan: MediaPlan;
@@ -142,6 +146,17 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<Workfl
     },
   });
   return executeAndVerify(options, source, plan, 'Frame extraction is verified and ready.');
+}
+
+/**
+ * Inspect, plan, execute, and verify concatenation of multiple media sources.
+ */
+export async function concatenate(options: ConcatenateOptions): Promise<WorkflowResult> {
+  const source = await inspectPhase(options, 'concatenation');
+  const plan = await planningPhase(options, 'concatenation', source, {
+    concatenate: options.inputs,
+  });
+  return executeAndVerify(options, source, plan, 'Concatenation is verified and ready.');
 }
 
 function verticalDimensions(

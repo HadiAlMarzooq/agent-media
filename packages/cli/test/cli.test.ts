@@ -53,6 +53,7 @@ describe('CLI', () => {
       'normalize',
       'extract-audio',
       'extract-frame',
+      'concatenate',
       'execute',
       'verify',
     ]);

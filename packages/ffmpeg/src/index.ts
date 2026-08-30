@@ -12,6 +12,7 @@ export {
   normalize,
   extractAudio,
   extractFrame,
+  concatenate,
 } from './workflows.js';
 export type {
   WorkflowOptions,
@@ -20,5 +21,6 @@ export type {
   NormalizeOptions,
   ExtractAudioOptions,
   ExtractFrameOptions,
+  ConcatenateOptions,
   WorkflowResult,
 } from './workflows.js';

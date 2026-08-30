@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '@hadialmarzooq/agent-media-core';
 
 import {
+  concatenate,
   executePlan,
   inspectMedia,
   makeVertical,
@@ -363,5 +364,50 @@ describe('execution', () => {
 
     expect(result.output).toMatchObject({ kind: 'image' });
     expect(result.verification).toMatchObject({ passed: true });
+  });
+
+  it('runs the concatenate workflow and produces a longer output', async () => {
+    const output = join(directory, 'concat-workflow.mp4');
+    const result = await concatenate({
+      input: fixture,
+      inputs: [fixture],
+      output,
+      overwrite: true,
+    });
+
+    expect(result.output.durationSeconds).toBeGreaterThan(3.5);
+    expect(result.verification).toMatchObject({ passed: true });
+  });
+
+  it('rejects execution when the output directory does not exist', async () => {
+    const output = join(directory, 'nonexistent', 'output.mp4');
+    await expect(
+      executePlan(planMedia({ source: metadata, goals: { compatibility: 'high' } }), {
+        output,
+        sourceMetadata: metadata,
+      }),
+    ).rejects.toMatchObject({ code: 'OUTPUT_DIR_MISSING' });
+  });
+
+  it('rejects output extension mismatch at plan time', async () => {
+    const output = join(directory, 'wrong-ext.webm');
+    await expect(
+      executePlan(planMedia({ source: metadata, goals: { compatibility: 'high' } }), {
+        output,
+        sourceMetadata: metadata,
+        overwrite: true,
+      }),
+    ).rejects.toMatchObject({ code: 'OUTPUT_EXTENSION_MISMATCH' });
+  });
+
+  it('reports the full resolved path when the input file does not exist', async () => {
+    try {
+      await inspectMedia(join(directory, 'totally-missing.mp4'));
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'UNSUPPORTED_INPUT' });
+      expect(error).toMatchObject({
+        context: { input: expect.stringContaining('totally-missing.mp4') },
+      });
+    }
   });
 });

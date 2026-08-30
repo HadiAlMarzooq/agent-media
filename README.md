@@ -49,15 +49,15 @@ step in a safer contract:
 semantic goal → inspect → versioned Media IR → execute → inspect again → verify
 ```
 
-| Property               | What the agent gets                                                           |
-| ---------------------- | ----------------------------------------------------------------------------- |
-| Semantic planning      | Goals and reasons instead of raw FFmpeg flags                                 |
-| Portable Media IR      | Validated JSON that can be reviewed, persisted, and replayed                  |
-| Outcome verification   | Structured checks for duration, geometry, size, audio, codec, and pixels      |
-| Structured recovery    | Stable error codes and every failed verification check in one report          |
-| Observable execution   | Monotonic progress through SDK callbacks, CLI NDJSON, and MCP notifications   |
-| One implementation     | The SDK, JSON CLI, MCP server, and high-level workflows share the same core   |
-| 5 high-level workflows | `makeVertical`, `optimizeForWeb`, `normalize`, `extractAudio`, `extractFrame` |
+| Property               | What the agent gets                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| Semantic planning      | Goals and reasons instead of raw FFmpeg flags                                                |
+| Portable Media IR      | Validated JSON that can be reviewed, persisted, and replayed                                 |
+| Outcome verification   | Structured checks for duration, geometry, size, audio, codec, and pixels                     |
+| Structured recovery    | Stable error codes and every failed verification check in one report                         |
+| Observable execution   | Monotonic progress through SDK callbacks, CLI NDJSON, and MCP notifications                  |
+| One implementation     | The SDK, JSON CLI, MCP server, and high-level workflows share the same core                  |
+| 6 high-level workflows | `makeVertical`, `optimizeForWeb`, `normalize`, `extractAudio`, `extractFrame`, `concatenate` |
 
 ## Quick start
 
@@ -74,6 +74,7 @@ import {
   normalize,
   extractAudio,
   extractFrame,
+  concatenate,
 } from '@hadialmarzooq/agent-media-ffmpeg';
 
 // 9:16 vertical, H.264/yuv420p, faststart, size-constrained
@@ -100,6 +101,13 @@ const audio = await extractAudio({ input: 'demo.mp4', output: 'audio.m4a' });
 
 // Extract a still frame
 const frame = await extractFrame({ input: 'demo.mp4', output: 'frame.jpg', atSeconds: 2 });
+
+// Concatenate multiple sources
+const joined = await concatenate({
+  input: 'demo.mp4',
+  inputs: ['clip2.mp4'],
+  output: 'joined.mp4',
+});
 
 console.log(vertical.verification.passed); // true, or throws VERIFICATION_FAILED
 ```
@@ -141,6 +149,7 @@ agent-media optimize demo.mp4 --output web.mp4 --max-size 10 --progress
 agent-media normalize demo.mp4 --output normalized.mp4
 agent-media extract-audio demo.mp4 --output audio.m4a
 agent-media extract-frame demo.mp4 --output frame.jpg --at 2
+agent-media concatenate demo.mp4 --inputs clip2.mp4 clip3.mp4 --output joined.mp4 --progress
 agent-media plan demo.mp4 --aspect 9:16 --max-size 25 --out plan.json
 agent-media execute plan.json --output replay.mp4 --progress
 agent-media verify replay.mp4 --against plan.json
@@ -152,18 +161,22 @@ recovery actions.
 
 ## MCP
 
-Run `agent-media-mcp` over stdio. It exposes ten semantic tools:
+Run `agent-media-mcp` over stdio. It exposes eleven semantic tools:
 
-- `inspect_media`
-- `get_media_capabilities`
-- `plan_media`
+- `inspect_media` (read-only)
+- `get_media_capabilities` (read-only)
+- `plan_media` (read-only)
 - `make_vertical`
 - `optimize_for_web`
 - `normalize_media`
 - `extract_audio`
 - `extract_frame`
+- `concatenate_media`
 - `execute_media_plan`
-- `verify_media`
+- `verify_media` (read-only)
+
+Read-only tools are annotated with `readOnlyHint`; writer tools with `destructiveHint` so clients
+like Claude Code can distinguish safe inspections from overwrite-capable calls.
 
 `make_vertical`, `optimize_for_web`, `normalize_media`, `extract_audio`, `extract_frame`, and
 `execute_media_plan` send standard MCP progress notifications when the client requests progress.
