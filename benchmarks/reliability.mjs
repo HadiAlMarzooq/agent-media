@@ -240,7 +240,10 @@ try {
 
   const capabilities = await getCapabilities();
   const semanticResults = Object.fromEntries(
-    cases.map(({ id, passed, evidence }) => [id, { passed, evidence }]),
+    cases.map(({ id, passed, evidence }) => [
+      id,
+      { passed, signature: semanticSignature(evidence) },
+    ]),
   );
   const semanticFingerprint = createHash('sha256')
     .update(JSON.stringify(semanticResults))
@@ -322,4 +325,15 @@ function argument(name) {
 
 function rounded(value) {
   return Math.round(value * 100) / 100;
+}
+
+function semanticSignature(evidence) {
+  if (evidence === null || typeof evidence !== 'object') return evidence;
+  const stable = {};
+  for (const [key, value] of Object.entries(evidence)) {
+    if (key === 'durationSeconds' || key === 'sizeBytes' || key === 'durationMs') continue;
+    if (key === 'observedBytes' || key === 'previousLimitBytes') continue;
+    stable[key] = value;
+  }
+  return stable;
 }
