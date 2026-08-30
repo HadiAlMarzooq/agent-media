@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import process from 'node:process';
 
 import { parsePlan, planMedia, serializePlan, verifyMedia } from '../packages/core/dist/index.js';
@@ -93,6 +94,7 @@ process.stdout.write(
 step('Generating test source video');
 await generateSource(sourcePath);
 success(`Created ${sourcePath.split('/').pop()}`);
+await sleep(800);
 
 step('Inspecting source media');
 const source = await inspectMedia(sourcePath);
@@ -101,6 +103,7 @@ info('Dimensions', `${source.video?.width}x${source.video?.height}`);
 info('Aspect Ratio', source.video?.aspectRatio);
 info('Duration', `${source.durationSeconds}s`);
 info('Audio', source.audio.present ? 'present' : 'absent');
+await sleep(1200);
 
 step('Planning: 180×320 vertical, 1s, H.264, max 1 KB');
 const capabilities = await getCapabilities();
@@ -120,12 +123,14 @@ const initialPlan = planMedia({
 info('Steps', initialPlan.steps.map((s) => s.operation).join(' → '));
 info('Max size', `${initialPlan.expectations.maxSizeBytes} bytes`);
 success('Plan created and validated (Media IR v1)');
+await sleep(1200);
 
 step('Serializing and replaying plan (portable IR)');
 const serialized = serializePlan(initialPlan);
 info('Serialized', `${serialized.length} bytes JSON`);
 const replayed = parsePlan(serialized);
 success(`Replayed: IR v${replayed.irVersion}, ${replayed.steps.length} steps`);
+await sleep(1200);
 
 step('Executing plan (attempt 1 — intentionally too small)');
 const progress1 = [];
@@ -140,6 +145,7 @@ await executePlan(replayed, {
 const firstOutput = await inspectMedia(firstOutputPath);
 info('Output size', `${firstOutput.sizeBytes} bytes`);
 info('Progress', `0% → 100% (${progress1.length} events)`);
+await sleep(1200);
 
 step('Verifying output against plan');
 const failedVerification = verifyMedia(firstOutput, replayed.expectations);
@@ -149,12 +155,14 @@ info('Expected', failedVerification.checks.maxFileSize.expected);
 info('Actual', failedVerification.checks.maxFileSize.actual);
 warn('Structured error: VERIFICATION_FAILED');
 warn('Suggested: Adjust semantic goals and retry');
+await sleep(1500);
 
 step('Structured recovery — deriving feasible size constraint');
 const sizeCheck = failedVerification.checks.maxFileSize;
 const recoveredMaxSizeMB = Math.max(0.15, Math.ceil(sizeCheck.actual * 1.25) / 1_000_000);
 info('Observed', `${sizeCheck.actual} bytes`);
 info('New limit', `${recoveredMaxSizeMB} MB`);
+await sleep(1200);
 
 step('Re-planning with recovered constraint');
 const recoveredPlan = planMedia({
@@ -173,6 +181,7 @@ const recoveredPlan = planMedia({
 const recoveredSerialized = serializePlan(recoveredPlan);
 const replayedRecovered = parsePlan(recoveredSerialized);
 success('New plan created, serialized, and replayed');
+await sleep(1200);
 
 step('Executing recovered plan');
 const progress2 = [];
@@ -186,6 +195,7 @@ await executePlan(replayedRecovered, {
 });
 const recoveredOutput = await inspectMedia(recoveredOutputPath);
 info('Output size', `${recoveredOutput.sizeBytes} bytes`);
+await sleep(1200);
 
 step('Verifying recovered output');
 const recoveredVerification = verifyMedia(recoveredOutput, replayedRecovered.expectations);
@@ -197,6 +207,7 @@ success('maxFileSize: within limit ✓');
 success('videoCodec: h264 ✓');
 success('pixelFormat: yuv420p ✓');
 success('audio: present ✓');
+await sleep(1000);
 
 process.stdout.write(
   `\n${BOLD}${GREEN}╔══════════════════════════════════════════════════════╗${RESET}\n`,
