@@ -1,5 +1,11 @@
 # @hadialmarzooq/agent-media-core
 
+## 0.1.1
+
+### Patch Changes
+
+- Add README and LICENSE to published package files so npm registry pages show documentation.
+
 ## 0.1.0
 
 ### Minor Changes

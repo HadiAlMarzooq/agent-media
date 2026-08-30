@@ -1,5 +1,14 @@
 # @hadialmarzooq/agent-media-cli
 
+## 0.1.1
+
+### Patch Changes
+
+- Add README and LICENSE to published package files so npm registry pages show documentation.
+- Updated dependencies
+  - @hadialmarzooq/agent-media-core@0.1.1
+  - @hadialmarzooq/agent-media-ffmpeg@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

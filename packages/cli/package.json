@@ -1,6 +1,6 @@
 {
   "name": "@hadialmarzooq/agent-media-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "JSON-first CLI for deterministic, verified media workflows.",
   "keywords": [
     "media",
@@ -29,7 +29,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
